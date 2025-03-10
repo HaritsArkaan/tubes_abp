@@ -1,5 +1,5 @@
 name: snack_hunt
-description: A food Review application.
+description: A food delivery application.
 
 publish_to: 'none'
 
@@ -12,6 +12,8 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.2
+  google_fonts: ^5.1.0
+  provider: ^6.0.5
 
 dev_dependencies:
   flutter_test:
@@ -22,7 +24,16 @@ flutter:
   uses-material-design: true
 
   assets:
-    - images/logo.jpg
+    - images/logo.png
+    - images/profile.jpg
+    - images/risoles.jpg
+    - images/food.png
+    - images/drink.png
+    - images/dessert.png
+    - images/snack.png
+    - images/corndog.jpg
+    - images/mochi.jpg
+    - images/boba.jpg
     - images/
 
   fonts:

@@ -142,7 +142,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
         child: SizedBox(
           width: size.width * 0.4,
           child: Image.asset(
-            'images/logo.jpg',
+            'images/logo.png',
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) {
               return Column(
