@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'login.dart';
 import 'register.dart';
 import 'dashboard.dart';
+import 'tambahJajanan.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,11 +46,12 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      initialRoute: '/dashboard',
+      initialRoute: '/tambahJajanan',
       routes: {
         '/login': (context) => const LoginPage(),
         '/register': (context) => const RegisterPage(),
         '/dashboard': (context) => const DashboardPage(),
+        '/tambahJajanan': (context) => const AddSnackPage(),
       },
     );
   }
