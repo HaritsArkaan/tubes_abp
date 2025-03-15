@@ -15,6 +15,8 @@ dependencies:
   google_fonts: ^5.1.0
   provider: ^6.0.5
   image_picker: ^1.0.4
+  awesome_dialog: ^3.1.0
+  dotted_border: ^2.1.0
 
 dev_dependencies:
   flutter_test:
@@ -47,4 +49,3 @@ flutter:
           weight: 600
         - asset: fonts/Poppins-Bold.ttf
           weight: 700
-

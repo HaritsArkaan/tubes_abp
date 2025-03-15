@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:awesome_dialog/awesome_dialog.dart';
+import 'package:dotted_border/dotted_border.dart';
 import 'dart:io';
 
 class AddSnackPage extends StatefulWidget {
@@ -46,300 +48,219 @@ class _AddSnackPageState extends State<AddSnackPage> {
   }
 
   void _showConfirmationDialog() {
-    showDialog(
+    AwesomeDialog(
       context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Are you sure?',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF2E3E5C),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    // Yes button
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          // Add save logic here
-                          _saveSnack();
-                        },
-                        style: TextButton.styleFrom(
-                          backgroundColor: Colors.green.shade100,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: Text(
-                          'Yes, save',
-                          style: TextStyle(
-                            color: Colors.green.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    // No button
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: TextButton.styleFrom(
-                          backgroundColor: Colors.red.shade100,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: Text(
-                          'No',
-                          style: TextStyle(
-                            color: Colors.red.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
+      dialogType: DialogType.question,
+      animType: AnimType.scale,
+      title: 'Save Changes?',
+      desc: 'Do you want to save this snack?',
+      btnCancelText: 'Cancel',
+      btnOkText: 'Save',
+      btnCancelColor: Colors.grey,
+      btnOkColor: const Color(0xFF4CAF50),
+      btnCancelOnPress: () {},
+      btnOkOnPress: () {
+        _saveSnack();
       },
-    );
+    ).show();
   }
 
   void _saveSnack() {
-    // Implement save logic here
-    debugPrint('Saving snack...');
-    // You can add API call or database operation here
-
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Snack saved successfully!'),
-        backgroundColor: Colors.green.shade700,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-
-    // Navigate back
-    Navigator.pop(context);
+    AwesomeDialog(
+      context: context,
+      dialogType: DialogType.success,
+      animType: AnimType.scale,
+      title: 'Success!',
+      desc: 'Snack saved successfully!',
+      btnOkText: 'OK',
+      btnOkColor: const Color(0xFF4CAF50),
+      btnOkOnPress: () {
+        Navigator.pop(context);
+      },
+    ).show();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFD1E7D1),
+      backgroundColor: const Color(0xFFE8F5E9),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: const Icon(
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
+          child: IconButton(
+            icon: const Icon(
               Icons.arrow_back_ios_new,
               color: Color(0xFF2E3E5C),
               size: 16,
             ),
+            onPressed: () => Navigator.pop(context),
           ),
-          onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Add new',
           style: TextStyle(
-            color: Colors.green,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+            color: Color(0xFF4CAF50),
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
           ),
         ),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
+      body: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.5),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(30),
+            topRight: Radius.circular(30),
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Image upload area
               GestureDetector(
                 onTap: _pickImage,
-                child: Stack(
-                  children: [
-                    // Base container
-                    Container(
-                      height: 200,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: _imageFile != null
-                          ? ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Image.file(
-                          _imageFile!,
-                          fit: BoxFit.cover,
+                child: _imageFile != null
+                    ? ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.file(
+                    _imageFile!,
+                    height: 180,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                )
+                    : DottedBorder(
+                  borderType: BorderType.RRect,
+                  radius: const Radius.circular(16),
+                  color: Colors.grey.withOpacity(0.3),
+                  strokeWidth: 1,
+                  dashPattern: const [6, 3],
+                  child: Container(
+                    height: 180,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(
+                          Icons.cloud_upload_outlined,
+                          size: 32,
+                          color: Color(0xFFBDBDBD),
                         ),
-                      )
-                          : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.cloud_upload_outlined,
-                            size: 40,
-                            color: Colors.grey.shade400,
+                        SizedBox(height: 8),
+                        Text(
+                          'Add photos of snacks here',
+                          style: TextStyle(
+                            color: Color(0xFFBDBDBD),
+                            fontSize: 14,
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Add photos of snacks here',
-                            style: TextStyle(
-                              color: Colors.grey.shade400,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    // Dashed border overlay
-                    Container(
-                      height: 200,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        border: _imageFile == null ? _buildDashedBorder() : null,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 20),
-
-              // Name input
+              const SizedBox(height: 24),
               _buildInputField(
                 'Name of snacks',
                 _nameController,
                 '0/100',
                 'Add name of snacks here',
               ),
-              const SizedBox(height: 20),
-
-              // Price options
+              const SizedBox(height: 24),
               const Text(
                 'Snack prices',
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF2E3E5C),
                 ),
               ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
+              const SizedBox(height: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ..._priceOptions.map((price) => _buildPriceChip(price)),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _priceOptions.map((price) => _buildPriceChip(price)).toList(),
+                  ),
+                  const SizedBox(height: 8),
                   _buildCustomPriceInput(),
                 ],
               ),
-              const SizedBox(height: 20),
-
-              // Type selection
-              const Text(
-                'Type',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2E3E5C),
-                ),
+              const SizedBox(height: 24),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Type',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2E3E5C),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Choose the type that describes your snack!',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _typeOptions.map((type) => _buildTypeChip(type)).toList(),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              Text(
-                'Choose the type that describes your snack!',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: _typeOptions
-                    .map((type) => _buildTypeChip(type))
-                    .toList(),
-              ),
-              const SizedBox(height: 20),
-
-              // Address input
+              const SizedBox(height: 24),
               _buildInputField(
                 'Address',
                 _addressController,
                 '0/100',
                 'Add address here',
               ),
-              const SizedBox(height: 20),
-
-              // Contact input
+              const SizedBox(height: 24),
               _buildInputField(
                 'Contact',
                 _contactController,
                 '0/100',
                 'Add contact here',
               ),
-              const SizedBox(height: 30),
-
-              // Save button
+              const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _showConfirmationDialog,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green.shade600,
-                    foregroundColor: Colors.white,
+                    backgroundColor: const Color(0xFF4CAF50),
+                    elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    elevation: 0,
                   ),
                   child: const Text(
                     'Save',
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
                     ),
                   ),
                 ),
@@ -348,13 +269,6 @@ class _AddSnackPageState extends State<AddSnackPage> {
           ),
         ),
       ),
-    );
-  }
-
-  BoxBorder _buildDashedBorder() {
-    return Border.all(
-      color: Colors.grey.withOpacity(0.5),
-      width: 2,
     );
   }
 
@@ -373,16 +287,16 @@ class _AddSnackPageState extends State<AddSnackPage> {
             Text(
               label,
               style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
                 color: Color(0xFF2E3E5C),
               ),
             ),
             Text(
               counter,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12,
-                color: Colors.grey.shade600,
+                color: Color(0xFF9E9E9E),
               ),
             ),
           ],
@@ -390,22 +304,15 @@ class _AddSnackPageState extends State<AddSnackPage> {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: const Color(0xFFE8F5E9),
             borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
           ),
           child: TextField(
             controller: controller,
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: TextStyle(
-                color: Colors.grey.shade400,
+              hintStyle: const TextStyle(
+                color: Color(0xFF9E9E9E),
                 fontSize: 14,
               ),
               border: OutlineInputBorder(
@@ -416,6 +323,8 @@ class _AddSnackPageState extends State<AddSnackPage> {
                 horizontal: 16,
                 vertical: 12,
               ),
+              filled: true,
+              fillColor: const Color(0xFFE8F5E9),
             ),
           ),
         ),
@@ -436,46 +345,49 @@ class _AddSnackPageState extends State<AddSnackPage> {
           }
         });
       },
-      backgroundColor: Colors.white,
-      selectedColor: Colors.green.shade100,
+      backgroundColor: const Color(0xFFE8F5E9),
+      selectedColor: const Color(0xFF4CAF50),
       labelStyle: TextStyle(
-        color: isSelected ? Colors.green.shade700 : Colors.grey.shade600,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        color: isSelected ? Colors.white : const Color(0xFF4CAF50),
+        fontWeight: FontWeight.w500,
+        fontSize: 14,
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(
-          color: isSelected ? Colors.green.shade200 : Colors.grey.shade300,
+          color: isSelected ? Colors.transparent : const Color(0xFF4CAF50),
         ),
       ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
     );
   }
 
   Widget _buildCustomPriceInput() {
     return Container(
-      width: 150,
-      height: 32,
+      height: 40,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFE8F5E9),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.grey.shade300,
-        ),
       ),
       child: TextField(
         controller: _customPriceController,
         keyboardType: TextInputType.number,
-        decoration: InputDecoration(
+        decoration: const InputDecoration(
           hintText: 'Enter another nominal here',
           hintStyle: TextStyle(
-            color: Colors.grey.shade400,
-            fontSize: 12,
+            color: Color(0xFF9E9E9E),
+            fontSize: 14,
           ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: 16,
             vertical: 8,
           ),
+          filled: true,
+          fillColor: Color(0xFFE8F5E9),
         ),
         onChanged: (value) {
           if (value.isNotEmpty) {
@@ -498,19 +410,20 @@ class _AddSnackPageState extends State<AddSnackPage> {
           _selectedType = selected ? type : '';
         });
       },
-      backgroundColor: Colors.white,
-      selectedColor: Colors.green.shade100,
+      backgroundColor: const Color(0xFFE8F5E9),
+      selectedColor: const Color(0xFF4CAF50),
       labelStyle: TextStyle(
-        color: isSelected ? Colors.green.shade700 : Colors.grey.shade600,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        color: isSelected ? Colors.white : const Color(0xFF4CAF50),
+        fontWeight: FontWeight.w500,
+        fontSize: 14,
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(
-          color: isSelected ? Colors.green.shade200 : Colors.grey.shade300,
+          color: isSelected ? Colors.transparent : const Color(0xFF4CAF50),
         ),
       ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
     );
   }
 }
-
