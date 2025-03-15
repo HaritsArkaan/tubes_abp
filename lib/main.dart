@@ -5,6 +5,7 @@ import 'login.dart';
 import 'register.dart';
 import 'dashboard.dart';
 import 'tambahJajanan.dart';
+import 'profile.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,12 +47,13 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      initialRoute: '/tambahJajanan',
+      initialRoute: '/profile',
       routes: {
         '/login': (context) => const LoginPage(),
         '/register': (context) => const RegisterPage(),
         '/dashboard': (context) => const DashboardPage(),
         '/tambahJajanan': (context) => const AddSnackPage(),
+        '/profile': (context) => const ProfilePage(),
       },
     );
   }
