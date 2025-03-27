@@ -98,7 +98,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
             ),
           ],
         ),
-        bottomNavigationBar: const AdvancedNavBar(),
+        bottomNavigationBar: const NavBar(),
       ),
     );
   }

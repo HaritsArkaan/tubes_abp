@@ -1,217 +1,284 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
-class AdvancedNavBar extends StatefulWidget {
-  const AdvancedNavBar({Key? key}) : super(key: key);
+class NavBar extends StatefulWidget {
+  final int selectedIndex;
+  final Function(int)? onItemSelected;
+
+  const NavBar({
+    Key? key,
+    this.selectedIndex = 0,
+    this.onItemSelected,
+  }) : super(key: key);
 
   @override
-  _AdvancedNavBarState createState() => _AdvancedNavBarState();
+  _NavBarState createState() => _NavBarState();
 }
 
-class _AdvancedNavBarState extends State<AdvancedNavBar> with TickerProviderStateMixin {
-  int _selectedIndex = 0;
+class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
+  late int _selectedIndex;
+  late AnimationController _selectionController;
+  late AnimationController _rippleController;
+  late Animation<double> _rippleAnimation;
 
-  // Animation controllers
-  late AnimationController _bounceController;
-  late AnimationController _rotationController;
-
-  // Animations
-  late Animation<double> _bounceAnimation;
-  late Animation<double> _rotationAnimation;
+  final List<GlobalKey> _navItemKeys = List.generate(4, (_) => GlobalKey());
+  Offset _rippleCenter = Offset.zero;
 
   @override
   void initState() {
     super.initState();
+    _selectedIndex = widget.selectedIndex;
 
-    _bounceController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-
-    _rotationController = AnimationController(
-      vsync: this,
+    _selectionController = AnimationController(
       duration: const Duration(milliseconds: 400),
+      vsync: this,
+    )..forward();
+
+    _rippleController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
     );
 
-    _bounceAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _bounceController,
-        curve: Curves.easeOut,
-      ),
-    );
-
-    _rotationAnimation = Tween<double>(begin: 0.0, end: math.pi / 12).animate(
-      CurvedAnimation(
-        parent: _rotationController,
-        curve: Curves.easeOutBack,
-      ),
+    _rippleAnimation = CurvedAnimation(
+      parent: _rippleController,
+      curve: Curves.easeOutQuart,
     );
   }
 
   @override
   void dispose() {
-    _bounceController.dispose();
-    _rotationController.dispose();
+    _selectionController.dispose();
+    _rippleController.dispose();
     super.dispose();
   }
 
-  void _selectItem(int index) {
-    if (_selectedIndex != index) {
+  @override
+  void didUpdateWidget(NavBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedIndex != _selectedIndex) {
       setState(() {
-        _selectedIndex = index;
+        _selectedIndex = widget.selectedIndex;
       });
+      _selectionController.reset();
+      _selectionController.forward();
+    }
+  }
 
-      _bounceController.reset();
-      _bounceController.forward();
+  void _onItemTapped(int index) {
+    if (_selectedIndex != index) {
+      // Get the position of the tapped item for ripple effect
+      if (_navItemKeys[index].currentContext != null) {
+        final RenderBox box = _navItemKeys[index].currentContext!.findRenderObject() as RenderBox;
+        final position = box.localToGlobal(Offset.zero);
+        final size = box.size;
 
-      if (index == 1) {
-        _rotationController.reset();
-        _rotationController.forward();
+        setState(() {
+          _rippleCenter = Offset(
+            position.dx + size.width / 2,
+            position.dy + size.height / 2,
+          );
+          _selectedIndex = index;
+        });
+
+        _rippleController.reset();
+        _rippleController.forward();
+
+        if (widget.onItemSelected != null) {
+          widget.onItemSelected!(index);
+        }
       }
-    } else if (index == 1) {
-      _rotationController.reset();
-      _rotationController.forward();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    // Adjust height based on bottom padding (for devices with notches)
+    final double navbarHeight = math.max(65.0, 65.0 + (bottomPadding > 0 ? bottomPadding - 10.0 : 0.0));
+
     return Container(
-      height: 64,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      height: navbarHeight,
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFFD1E7D1),
-        borderRadius: BorderRadius.circular(32),
+        // Lighter green color
+        color: const Color(0xFF8BC34A),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            spreadRadius: 0,
+            offset: const Offset(0, -2),
           ),
         ],
       ),
       child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
         children: [
-          // Nav items row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildNavItem(0, Icons.home_outlined, Icons.home_rounded, 'Home'),
-              _buildNavItem(1, Icons.add_circle_outline, Icons.add_circle, 'Add new'),
-              _buildNavItem(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'Favorite'),
-              _buildNavItem(3, Icons.menu_rounded, Icons.menu_rounded, 'My Review'),
-            ],
+          // Ripple effect
+          AnimatedBuilder(
+            animation: _rippleAnimation,
+            builder: (context, child) {
+              return CustomPaint(
+                size: Size(screenWidth.toDouble(), navbarHeight.toDouble()),
+                painter: RipplePainter(
+                  center: _rippleCenter,
+                  radius: _rippleAnimation.value * screenWidth * 0.8,
+                  color: Colors.white.withOpacity(0.1),
+                ),
+              );
+            },
           ),
 
-          // Add Button
-          if (_selectedIndex == 1)
-            Positioned(
-              top: -22,
-              child: AnimatedBuilder(
-                animation: Listenable.merge([_bounceAnimation, _rotationAnimation]),
-                builder: (context, child) {
-                  final scale = 1.0 + (_bounceAnimation.value * 0.1);
-                  return Transform.scale(
-                    scale: scale,
-                    child: Transform.rotate(
-                      angle: _rotationAnimation.value,
-                      child: GestureDetector(
-                        onTap: () {
-                          _rotationController.reset();
-                          _rotationController.forward();
-                        },
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.green.shade400,
-                                Colors.green.shade600,
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.green.withOpacity(0.3),
-                                blurRadius: 8,
-                                spreadRadius: 1,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.add_rounded,
-                            color: Colors.white,
-                            size: 28,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+          // Nav items
+          SafeArea(
+            top: false,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildNavItem(0, Icons.home_outlined, Icons.home_rounded, 'Home'),
+                _buildNavItem(1, Icons.add_circle_outline, Icons.add_circle, 'Add new'),
+                _buildNavItem(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'Favorite'),
+                _buildNavItem(3, Icons.photo_library_outlined, Icons.photo_library, 'My Review'),
+              ],
+            ),
+          ),
+
+          // Indicator line at the top of selected item
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            top: 0,
+            left: _getIndicatorPosition(),
+            child: Container(
+              width: 40,
+              height: 3,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.3),
+                    blurRadius: 3,
+                    spreadRadius: 0.5,
+                  ),
+                ],
               ),
             ),
+          ),
         ],
       ),
     );
   }
 
+  double _getIndicatorPosition() {
+    if (_navItemKeys.isEmpty || _navItemKeys[_selectedIndex].currentContext == null) {
+      return 0;
+    }
+
+    final RenderBox box = _navItemKeys[_selectedIndex].currentContext!.findRenderObject() as RenderBox;
+    final position = box.localToGlobal(Offset.zero);
+    final size = box.size;
+
+    return position.dx + (size.width - 40) / 2;
+  }
+
   Widget _buildNavItem(int index, IconData outlineIcon, IconData filledIcon, String label) {
-    final isSelected = _selectedIndex == index;
+    final bool isSelected = _selectedIndex == index;
 
     return GestureDetector(
-      onTap: () => _selectItem(index),
-      behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 72,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isSelected ? Colors.white : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                transitionBuilder: (child, animation) {
-                  return ScaleTransition(
-                    scale: animation,
-                    child: FadeTransition(
-                      opacity: animation,
-                      child: child,
+      key: _navItemKeys[index],
+      onTap: () => _onItemTapped(index),
+      child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Responsive sizing based on available width
+            final itemWidth = math.min(85, constraints.maxWidth / 4.5);
+            final iconSize = math.min(26, itemWidth * 0.35);
+            final fontSize = math.min(12, itemWidth * 0.16);
+
+            return Container(
+              width: itemWidth.toDouble(),
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOutCubic,
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
+                      shape: BoxShape.circle,
                     ),
-                  );
-                },
-                child: Icon(
-                  isSelected ? filledIcon : outlineIcon,
-                  key: ValueKey<bool>(isSelected),
-                  color: isSelected ? Colors.green.shade600 : Colors.grey.shade700,
-                  size: 24,
-                ),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: isSelected ? 1.0 : 0.0),
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) {
+                        return Transform.rotate(
+                          angle: value * math.pi * (index == 1 ? 0.5 : 0.05),
+                          child: Icon(
+                            value > 0.5 ? filledIcon : outlineIcon,
+                            color: Colors.white,
+                            size: iconSize + (value * 2), // Slightly larger when selected
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: isSelected ? (fontSize + 1.0) : fontSize.toDouble(),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      letterSpacing: 0.2,
+                    ),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.green.shade600 : Colors.grey.shade700,
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
+            );
+          }
       ),
     );
   }
 }
 
+// Custom painter for ripple effect
+class RipplePainter extends CustomPainter {
+  final Offset center;
+  final double radius;
+  final Color color;
+
+  RipplePainter({
+    required this.center,
+    required this.radius,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    canvas.drawCircle(center, radius, paint);
+  }
+
+  @override
+  bool shouldRepaint(RipplePainter oldDelegate) {
+    return oldDelegate.center != center ||
+        oldDelegate.radius != radius ||
+        oldDelegate.color != color;
+  }
+}
