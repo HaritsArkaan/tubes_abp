@@ -1,21 +1,109 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'navbar.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'navbar.dart'; // Import your navbar
 
-class MyReviewPage extends StatefulWidget {
-  const MyReviewPage({Key? key}) : super(key: key);
+// Model class for snack items
+class SnackItem {
+  final String id;
+  final String name;
+  final String imageUrl;
+  final String price;
+  final String type;
+  final String location;
+  final double rating;
+  final int reviewCount;
 
-  @override
-  State<MyReviewPage> createState() => _MyReviewPageState();
+  SnackItem({
+    required this.id,
+    required this.name,
+    required this.imageUrl,
+    required this.price,
+    required this.type,
+    required this.location,
+    required this.rating,
+    required this.reviewCount,
+  });
 }
 
-class _MyReviewPageState extends State<MyReviewPage> {
+// Sample data with actual image URLs
+final List<SnackItem> snackItems = [
+  SnackItem(
+    id: '1',
+    name: 'Risoles Mayo',
+    imageUrl: 'https://images.unsplash.com/photo-1558745010-d2a3c21762ab?q=80&w=400',
+    price: '5.000',
+    type: 'Snack',
+    location: 'Jl. Kebon Jeruk No. 10',
+    rating: 4.5,
+    reviewCount: 24,
+  ),
+  SnackItem(
+    id: '2',
+    name: 'Boba Milk Tea',
+    imageUrl: 'https://images.unsplash.com/photo-1558857563-b371033873b8?q=80&w=400',
+    price: '15.000',
+    type: 'Drink',
+    location: 'Jl. Sudirman No. 45',
+    rating: 4.8,
+    reviewCount: 36,
+  ),
+  SnackItem(
+    id: '3',
+    name: 'Mochi Ice Cream',
+    imageUrl: 'https://images.unsplash.com/photo-1631206753348-db44968fd440?q=80&w=400',
+    price: '10.000',
+    type: 'Dessert',
+    location: 'Jl. Gatot Subroto No. 22',
+    rating: 4.2,
+    reviewCount: 18,
+  ),
+  SnackItem(
+    id: '4',
+    name: 'Corn Dog',
+    imageUrl: 'https://images.unsplash.com/photo-1619881590738-a111d176d906?q=80&w=400',
+    price: '12.000',
+    type: 'Food',
+    location: 'Jl. Thamrin No. 33',
+    rating: 4.6,
+    reviewCount: 42,
+  ),
+  SnackItem(
+    id: '5',
+    name: 'Toppokki',
+    imageUrl: 'https://images.unsplash.com/photo-1635363638580-c2809d049eee?q=80&w=400',
+    price: '18.000',
+    type: 'Food',
+    location: 'Jl. Asia Afrika No. 15',
+    rating: 4.7,
+    reviewCount: 32,
+  ),
+  SnackItem(
+    id: '6',
+    name: 'Ice Jeruk',
+    imageUrl: 'https://images.unsplash.com/photo-1560526860-1f0e56046c85?q=80&w=400',
+    price: '8.000',
+    type: 'Drink',
+    location: 'Jl. Cihampelas No. 50',
+    rating: 4.5,
+    reviewCount: 18,
+  ),
+];
+
+class JajananKu extends StatefulWidget {
+  const JajananKu({Key? key}) : super(key: key);
+
+  @override
+  State<JajananKu> createState() => _JajananKuState();
+}
+
+class _JajananKuState extends State<JajananKu> {
   bool _isLoading = true;
-  final List<ReviewItem> _reviewItems = reviewItems;
+  final List<SnackItem> _snackItems = snackItems;
+  OverlayEntry? _overlayEntry;
 
   @override
   void initState() {
@@ -30,10 +118,26 @@ class _MyReviewPageState extends State<MyReviewPage> {
     });
   }
 
+  @override
+  void dispose() {
+    // Make sure to remove any active overlay when disposing
+    _removeOverlay();
+    super.dispose();
+  }
+
+  // Remove any existing overlay
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  // Show a custom toast message near the FAB
   void _showToast(String message) {
-    // Create a custom positioned toast near the + button
-    final overlay = Overlay.of(context);
-    final overlayEntry = OverlayEntry(
+    // Remove any existing overlay first
+    _removeOverlay();
+
+    // Create a new overlay entry
+    _overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
         bottom: 100, // Position above the navbar
         right: 20,   // Position from right edge
@@ -52,109 +156,49 @@ class _MyReviewPageState extends State<MyReviewPage> {
                 ),
               ],
             ),
-            child: Text(
-              message,
-              style: GoogleFonts.poppins(
-                color: Colors.white,
-                fontSize: 14,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  message,
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: _removeOverlay,
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
 
-    // Show the toast and remove after 2 seconds
-    overlay.insert(overlayEntry);
+    // Insert the overlay
+    Overlay.of(context).insert(_overlayEntry!);
+
+    // Auto-remove after 2 seconds
     Future.delayed(const Duration(seconds: 2), () {
-      overlayEntry.remove();
+      if (_overlayEntry != null) {
+        _removeOverlay();
+      }
     });
   }
 
-  void _editReview(ReviewItem item) {
-    // Show edit review dialog
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15),
-        ),
-        title: Text(
-          'Edit Review for ${item.name}',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF70AE6E),
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Rating stars
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(5, (index) {
-                return IconButton(
-                  icon: Icon(
-                    index < item.rating.floor() ? Icons.star : Icons.star_border,
-                    color: const Color(0xFFFFD700),
-                  ),
-                  onPressed: () {
-                    // Update rating logic would go here
-                  },
-                );
-              }),
-            ),
-            const SizedBox(height: 15),
-            // Review text field
-            TextField(
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Your review...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFF70AE6E)),
-                ),
-              ),
-              controller: TextEditingController(text: item.reviewText),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Batal',
-              style: GoogleFonts.poppins(color: Colors.grey[600]),
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF70AE6E),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onPressed: () {
-              // Save review logic would go here
-              Navigator.pop(context);
-              _showToast('Review updated!');
-            },
-            child: Text(
-              'Simpan',
-              style: GoogleFonts.poppins(),
-            ),
-          ),
-        ],
-      ),
-    );
+  void _editSnack(SnackItem item) {
+    // Mock navigation
+    _showToast('Edit: ${item.name}');
   }
 
-  void _deleteReview(ReviewItem item) {
+  void _deleteSnack(SnackItem item) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -163,14 +207,14 @@ class _MyReviewPageState extends State<MyReviewPage> {
             borderRadius: BorderRadius.circular(15),
           ),
           title: Text(
-            'Hapus Review?',
+            'Hapus Jajanan?',
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.w600,
               color: const Color(0xFF70AE6E),
             ),
           ),
           content: Text(
-            'Apakah anda yakin ingin menghapus review untuk ${item.name}?',
+            'Apakah anda yakin ingin menghapus ${item.name}?',
             style: GoogleFonts.poppins(),
           ),
           actions: [
@@ -191,10 +235,10 @@ class _MyReviewPageState extends State<MyReviewPage> {
               ),
               onPressed: () {
                 setState(() {
-                  _reviewItems.remove(item);
+                  _snackItems.remove(item);
                 });
                 Navigator.pop(context);
-                _showToast('Review berhasil dihapus');
+                _showToast('${item.name} berhasil dihapus');
               },
               child: Text(
                 'Ya, Hapus!',
@@ -207,8 +251,14 @@ class _MyReviewPageState extends State<MyReviewPage> {
     );
   }
 
-  void _addNewReview() {
-    _showToast('Tambah Review Baru');
+  void _viewSnackDetail(SnackItem item) {
+    // Mock navigation
+    _showToast('Detail: ${item.name}');
+  }
+
+  void _addNewSnack() {
+    // Mock navigation
+    _showToast('Tambah Jajanan Baru');
   }
 
   @override
@@ -249,7 +299,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                         ),
                         const SizedBox(width: 12),
                         Text(
-                          'My Review',
+                          'Jajananku',
                           style: GoogleFonts.poppins(
                             fontSize: 24,
                             fontWeight: FontWeight.w600,
@@ -281,7 +331,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                           color: Color(0xFF70AE6E),
                           size: 24,
                         ),
-                        onPressed: _addNewReview,
+                        onPressed: _addNewSnack,
                       ),
                     ).animate().fadeIn(duration: 600.ms).slideX(
                       begin: 0.1,
@@ -300,7 +350,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Kelola review yang telah Anda berikan',
+                    'Kelola jajanan yang telah Anda tambahkan',
                     style: GoogleFonts.poppins(
                       fontSize: 14,
                       color: Colors.grey[600],
@@ -311,11 +361,11 @@ class _MyReviewPageState extends State<MyReviewPage> {
 
               const SizedBox(height: 16),
 
-              // Review grid
+              // Snack grid
               Expanded(
                 child: _isLoading
                     ? _buildLoadingGrid(size)
-                    : _reviewItems.isEmpty
+                    : _snackItems.isEmpty
                     ? _buildEmptyState(size)
                     : RefreshIndicator(
                   color: const Color(0xFF70AE6E),
@@ -334,9 +384,9 @@ class _MyReviewPageState extends State<MyReviewPage> {
                       crossAxisCount: 2,
                       mainAxisSpacing: 15,
                       crossAxisSpacing: 15,
-                      itemCount: _reviewItems.length,
+                      itemCount: _snackItems.length,
                       itemBuilder: (context, index) {
-                        return _buildReviewItem(index, size)
+                        return _buildSnackItem(index, size)
                             .animate()
                             .fadeIn(
                           delay: Duration(milliseconds: 50 * index),
@@ -357,10 +407,10 @@ class _MyReviewPageState extends State<MyReviewPage> {
           ),
         ),
       ),
-      floatingActionButton: _isLoading || _reviewItems.isEmpty
+      floatingActionButton: _isLoading || _snackItems.isEmpty
           ? null
           : FloatingActionButton(
-        onPressed: _addNewReview,
+        onPressed: _addNewSnack,
         backgroundColor: const Color(0xFF70AE6E),
         child: const Icon(Icons.add),
       ).animate().scale(
@@ -391,7 +441,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
               ],
             ),
             child: const Icon(
-              Icons.rate_review,
+              Icons.restaurant,
               size: 64,
               color: Color(0xFF70AE6E),
             ),
@@ -401,7 +451,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
           ),
           const SizedBox(height: 24),
           Text(
-            'Belum Ada Review',
+            'Belum Ada Jajanan',
             style: GoogleFonts.poppins(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -410,7 +460,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
           ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
           const SizedBox(height: 12),
           Text(
-            'Anda belum memberikan review apapun.',
+            'Anda belum menambahkan jajanan apapun.',
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 16,
@@ -419,10 +469,10 @@ class _MyReviewPageState extends State<MyReviewPage> {
           ).animate().fadeIn(delay: 400.ms, duration: 400.ms),
           const SizedBox(height: 32),
           ElevatedButton.icon(
-            onPressed: _addNewReview,
+            onPressed: _addNewSnack,
             icon: const Icon(Icons.add),
             label: Text(
-              'Tambah Review Sekarang',
+              'Tambah Jajanan Sekarang',
               style: GoogleFonts.poppins(fontSize: 16),
             ),
             style: ElevatedButton.styleFrom(
@@ -526,13 +576,13 @@ class _MyReviewPageState extends State<MyReviewPage> {
     );
   }
 
-  Widget _buildReviewItem(int index, Size size) {
-    final item = _reviewItems[index];
+  Widget _buildSnackItem(int index, Size size) {
+    final item = _snackItems[index];
     // Vary the height for visual interest
     final heightFactor = 1.2 + (index % 3) * 0.1;
 
     return GestureDetector(
-      onTap: () => _editReview(item),
+      onTap: () => _viewSnackDetail(item),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -555,7 +605,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   child: Hero(
-                    tag: 'review-${item.name}',
+                    tag: 'snack-${item.id}',
                     child: CachedNetworkImage(
                       imageUrl: item.imageUrl,
                       placeholder: (context, url) => Container(
@@ -579,14 +629,14 @@ class _MyReviewPageState extends State<MyReviewPage> {
                     ),
                   ),
                 ),
-                // Rating badge
+                // Price tag
                 Positioned(
                   top: 12,
-                  right: 12,
+                  left: 12,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF70AE6E),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
@@ -596,23 +646,40 @@ class _MyReviewPageState extends State<MyReviewPage> {
                         ),
                       ],
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.star,
-                          color: Colors.white,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          item.rating.toString(),
-                          style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
+                    child: Text(
+                      'Rp ${item.price}',
+                      style: GoogleFonts.poppins(
+                        color: const Color(0xFF70AE6E),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                // Type badge
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: _getTypeColor(item.type),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          spreadRadius: 0,
                         ),
                       ],
+                    ),
+                    child: Text(
+                      item.type,
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ),
@@ -637,29 +704,49 @@ class _MyReviewPageState extends State<MyReviewPage> {
                     overflow: TextOverflow.ellipsis,
                   ),
 
-                  // Review count
-                  Text(
-                    '${item.reviewCount} reviews',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                  // Rating
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.star,
+                        color: Color(0xFFFFD700),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${item.rating} (${item.reviewCount})',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
                   ),
 
-                  // Review text preview
-                  if (item.reviewText.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      item.reviewText,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.grey[800],
-                        fontStyle: FontStyle.italic,
+                  const SizedBox(height: 8),
+
+                  // Location
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        size: 14,
+                        color: Colors.grey[600],
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          item.location,
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
 
                   const SizedBox(height: 12),
 
@@ -671,7 +758,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                           'Edit',
                           Icons.edit_outlined,
                           const Color(0xFF70AE6E),
-                              () => _editReview(item),
+                              () => _editSnack(item),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -680,7 +767,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                           'Hapus',
                           Icons.delete_outline,
                           Colors.red,
-                              () => _deleteReview(item),
+                              () => _deleteSnack(item),
                         ),
                       ),
                     ],
@@ -731,67 +818,19 @@ class _MyReviewPageState extends State<MyReviewPage> {
       ),
     );
   }
+
+  Color _getTypeColor(String type) {
+    switch (type) {
+      case 'Food':
+        return const Color(0xFF5C6BC0); // Indigo
+      case 'Drink':
+        return const Color(0xFF26A69A); // Teal
+      case 'Dessert':
+        return const Color(0xFFEC407A); // Pink
+      case 'Snack':
+        return const Color(0xFFFF7043); // Deep Orange
+      default:
+        return const Color(0xFF70AE6E); // Default green
+    }
+  }
 }
-
-// Model class for review items
-class ReviewItem {
-  final String name;
-  final String imageUrl;
-  final double rating;
-  final int reviewCount;
-  final String reviewText;
-
-  ReviewItem({
-    required this.name,
-    required this.imageUrl,
-    required this.rating,
-    required this.reviewCount,
-    this.reviewText = '',
-  });
-}
-
-// Sample data with actual image URLs
-final List<ReviewItem> reviewItems = [
-  ReviewItem(
-    name: 'Corn dog',
-    imageUrl: 'https://images.unsplash.com/photo-1619881590738-a111d176d906?q=80&w=400',
-    rating: 4.8,
-    reviewCount: 30,
-    reviewText: 'Crispy outside, juicy inside. Perfect snack!',
-  ),
-  ReviewItem(
-    name: 'Mochi Daifuku',
-    imageUrl: 'https://images.unsplash.com/photo-1631206753348-db44968fd440?q=80&w=400',
-    rating: 4.9,
-    reviewCount: 25,
-    reviewText: 'Soft and chewy with delicious filling.',
-  ),
-  ReviewItem(
-    name: 'Boba',
-    imageUrl: 'https://images.unsplash.com/photo-1558857563-b371033873b8?q=80&w=400',
-    rating: 4.6,
-    reviewCount: 20,
-    reviewText: 'Perfect sweetness and chewy pearls!',
-  ),
-  ReviewItem(
-    name: 'Toppokki',
-    imageUrl: 'https://images.unsplash.com/photo-1635363638580-c2809d049eee?q=80&w=400',
-    rating: 4.7,
-    reviewCount: 32,
-    reviewText: 'Spicy and satisfying. Great sauce!',
-  ),
-  ReviewItem(
-    name: 'Ice Jeruk',
-    imageUrl: 'https://images.unsplash.com/photo-1560526860-1f0e56046c85?q=80&w=400',
-    rating: 4.5,
-    reviewCount: 18,
-    reviewText: 'Refreshing citrus flavor, perfect for hot days.',
-  ),
-  ReviewItem(
-    name: 'Mango Rice',
-    imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400',
-    rating: 4.8,
-    reviewCount: 25,
-    reviewText: 'Sweet mango pairs perfectly with the rice.',
-  ),
-];

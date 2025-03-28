@@ -9,6 +9,7 @@ import 'profile.dart';
 import 'favorite.dart';
 import 'myReview.dart';
 import 'detailJajanan.dart';
+import 'jajananku.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,7 +51,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      initialRoute: '/detailJajanan',
+      initialRoute: '/jajananku',
       routes: {
         '/login': (context) => const LoginPage(),
         '/register': (context) => const RegisterPage(),
@@ -60,6 +61,7 @@ class MyApp extends StatelessWidget {
         '/favorite': (context) => const FavoritePage(),
         '/myReview': (context) => const MyReviewPage(),
         '/detailJajanan': (context) => const FoodDetailPage(),
+        '/jajananku': (context) => const JajananKu(),
       },
     );
   }
