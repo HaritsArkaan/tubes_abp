@@ -1231,7 +1231,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
           ),
         ],
       ),
-        bottomNavigationBar: const NavBar(selectedIndex: 1),
+        bottomNavigationBar: const NavBar(),
     );
   }
 

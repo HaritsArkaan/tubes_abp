@@ -54,6 +54,7 @@ flutter:
     - images/mochi.jpg
     - images/boba.jpg
     - images/food.jpg
+    - images/salad.png
     - images/
 
   fonts:

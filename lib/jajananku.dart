@@ -5,6 +5,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'navbar.dart'; // Import your navbar
+import 'editJajanan.dart'; // Import the edit dialog
 
 // Model class for snack items
 class SnackItem {
@@ -194,8 +195,24 @@ class _JajananKuState extends State<JajananKu> {
   }
 
   void _editSnack(SnackItem item) {
-    // Mock navigation
-    _showToast('Edit: ${item.name}');
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return EditSnackDialog(
+          snackItem: item,
+          onSave: (updatedItem) {
+            setState(() {
+              // Find the index of the item to update
+              final index = _snackItems.indexWhere((snack) => snack.id == updatedItem.id);
+              if (index != -1) {
+                // Replace the old item with the updated one
+                _snackItems[index] = updatedItem;
+              }
+            });
+          },
+        );
+      },
+    );
   }
 
   void _deleteSnack(SnackItem item) {
@@ -834,3 +851,4 @@ class _JajananKuState extends State<JajananKu> {
     }
   }
 }
+

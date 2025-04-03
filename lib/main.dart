@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'landingPage.dart';
 import 'login.dart';
 import 'register.dart';
 import 'dashboard.dart';
@@ -51,8 +52,14 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      initialRoute: '/jajananku',
+      initialRoute: '/landing',
       routes: {
+        '/landing': (context) => LandingPage(
+          onComplete: () {
+            // Navigate to dashboard after landing page animation completes
+            Navigator.of(context).pushReplacementNamed('/dashboard');
+          },
+        ),
         '/login': (context) => const LoginPage(),
         '/register': (context) => const RegisterPage(),
         '/dashboard': (context) => const DashboardPage(),
@@ -66,4 +73,3 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
