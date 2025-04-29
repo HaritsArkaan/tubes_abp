@@ -101,10 +101,12 @@ class JajananKu extends StatefulWidget {
   State<JajananKu> createState() => _JajananKuState();
 }
 
-class _JajananKuState extends State<JajananKu> {
+class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   final List<SnackItem> _snackItems = snackItems;
   OverlayEntry? _overlayEntry;
+  late AnimationController _buttonAnimationController;
+  bool _isButtonHovered = false;
 
   @override
   void initState() {
@@ -117,12 +119,19 @@ class _JajananKuState extends State<JajananKu> {
         });
       }
     });
+
+    // Initialize animation controller for the add button
+    _buttonAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
   }
 
   @override
   void dispose() {
     // Make sure to remove any active overlay when disposing
     _removeOverlay();
+    _buttonAnimationController.dispose();
     super.dispose();
   }
 
@@ -274,8 +283,8 @@ class _JajananKuState extends State<JajananKu> {
   }
 
   void _addNewSnack() {
-    // Mock navigation
-    _showToast('Tambah Jajanan Baru');
+    // Navigate to the tambahJajanan route
+    Navigator.of(context).pushNamed('/tambahJajanan');
   }
 
   @override
@@ -329,40 +338,116 @@ class _JajananKuState extends State<JajananKu> {
                         ),
                       ],
                     ),
-                    // Add button
-                    Container(
+                  ],
+                ),
+              ),
+
+              // Add Button - Redesigned with icon and text
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: size.width * 0.05,
+                  vertical: size.height * 0.01,
+                ),
+                child: MouseRegion(
+                  onEnter: (_) => setState(() => _isButtonHovered = true),
+                  onExit: (_) => setState(() => _isButtonHovered = false),
+                  child: GestureDetector(
+                    onTap: _addNewSnack,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: _isButtonHovered
+                              ? [
+                            const Color(0xFF8BC34A),
+                            const Color(0xFF689F38),
+                          ]
+                              : [
+                            const Color(0xFF70AE6E),
+                            const Color(0xFF558B2F),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            spreadRadius: 1,
+                            color: const Color(0xFF70AE6E).withOpacity(_isButtonHovered ? 0.4 : 0.2),
+                            blurRadius: _isButtonHovered ? 12 : 8,
+                            spreadRadius: _isButtonHovered ? 2 : 0,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.add_circle_outline,
-                          color: Color(0xFF70AE6E),
-                          size: 24,
-                        ),
-                        onPressed: _addNewSnack,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Animated plus icon
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Transform.rotate(
+                              angle: _isButtonHovered ? 0.2 : 0.0,
+                              child: const Icon(
+                                Icons.add_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Text with animation
+                          Text(
+                            'Tambahkan Jajanan',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          // Arrow icon that appears on hover
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            width: _isButtonHovered ? 24 : 0,
+                            curve: Curves.easeInOut,
+                            child: _isButtonHovered
+                                ? const Icon(
+                              Icons.arrow_forward_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            )
+                                : const SizedBox.shrink(),
+                          ),
+                        ],
                       ),
-                    ).animate().fadeIn(duration: 600.ms).slideX(
-                      begin: 0.1,
-                      end: 0,
-                      curve: Curves.easeOutQuad,
+                    ).animate(
+                      onPlay: (controller) => controller.repeat(reverse: true),
+                    ).shimmer(
+                      duration: 2000.ms,
+                      color: Colors.white.withOpacity(0.1),
+                      size: 0.2,
+                      delay: 1000.ms,
                     ),
-                  ],
+                  ),
                 ),
+              ).animate().fadeIn(delay: 300.ms, duration: 600.ms).slideY(
+                begin: -0.2,
+                end: 0,
+                curve: Curves.easeOutQuad,
               ),
 
               // Subtitle
               Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: size.width * 0.05,
+                  vertical: size.height * 0.01,
                 ),
                 child: Align(
                   alignment: Alignment.centerLeft,
@@ -424,17 +509,7 @@ class _JajananKuState extends State<JajananKu> {
           ),
         ),
       ),
-      floatingActionButton: _isLoading || _snackItems.isEmpty
-          ? null
-          : FloatingActionButton(
-        onPressed: _addNewSnack,
-        backgroundColor: const Color(0xFF70AE6E),
-        child: const Icon(Icons.add),
-      ).animate().scale(
-        delay: 500.ms,
-        duration: 400.ms,
-        curve: Curves.elasticOut,
-      ),
+      // No floating action button as requested
       bottomNavigationBar: const NavBar(),
     );
   }
@@ -486,7 +561,9 @@ class _JajananKuState extends State<JajananKu> {
           ).animate().fadeIn(delay: 400.ms, duration: 400.ms),
           const SizedBox(height: 32),
           ElevatedButton.icon(
-            onPressed: _addNewSnack,
+            onPressed: () {
+              Navigator.of(context).pushNamed('/tambahJajanan');
+            },
             icon: const Icon(Icons.add),
             label: Text(
               'Tambah Jajanan Sekarang',
@@ -851,4 +928,3 @@ class _JajananKuState extends State<JajananKu> {
     }
   }
 }
-

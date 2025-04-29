@@ -2,13 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
 class NavBar extends StatefulWidget {
-  final int selectedIndex;
-  final Function(int)? onItemSelected;
-
   const NavBar({
     Key? key,
-    this.selectedIndex = 0,
-    this.onItemSelected,
   }) : super(key: key);
 
   @override
@@ -16,7 +11,7 @@ class NavBar extends StatefulWidget {
 }
 
 class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
-  late int _selectedIndex;
+  int _selectedIndex = 0;
   late AnimationController _bounceController;
   late AnimationController _rippleController;
   late AnimationController _rotationController;
@@ -36,10 +31,22 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
     const Color(0xFFDCEDC8),
   ];
 
+  // Define routes for each navigation item - removed the Add tab
+  final List<String> _routes = [
+    '/dashboard',
+    '/jajananku',
+    '/favorite',
+    '/myReview',
+  ];
+
   @override
   void initState() {
     super.initState();
-    _selectedIndex = widget.selectedIndex;
+
+    // Determine the current route and set the selected index accordingly
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateSelectedIndexBasedOnRoute();
+    });
 
     // Bounce animation for icon
     _bounceController = AnimationController(
@@ -89,6 +96,37 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
     _slideController.forward();
   }
 
+  void _updateSelectedIndexBasedOnRoute() {
+    final currentRoute = ModalRoute.of(context)?.settings.name ?? '';
+
+    // Check if we're on a specific page and update the selected index
+    if (currentRoute.contains('jajananku')) {
+      setState(() {
+        _selectedIndex = 1; // Jajananku is now index 1 (after removing Add)
+      });
+    } else if (currentRoute.contains('favorite')) {
+      setState(() {
+        _selectedIndex = 2; // Favorite is now index 2
+      });
+    } else if (currentRoute.contains('myReview')) {
+      setState(() {
+        _selectedIndex = 3; // Review is now index 3
+      });
+    } else {
+      // Default to home/dashboard
+      setState(() {
+        _selectedIndex = 0; // Home index
+      });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Update selected index when dependencies change (like route changes)
+    _updateSelectedIndexBasedOnRoute();
+  }
+
   @override
   void dispose() {
     _bounceController.dispose();
@@ -114,13 +152,14 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
       _slideController.reset();
       _slideController.forward();
 
-      if (index == 2) { // Jajananku index
+      if (index == 1) { // Jajananku index is now 1
         _rotationController.reset();
         _rotationController.forward();
       }
 
-      widget.onItemSelected?.call(index);
-    } else if (index == 2) { // Animate Jajananku icon when tapped again
+      // Navigate to the corresponding route
+      _navigateToRoute(index);
+    } else if (index == 1) { // Jajananku index is now 1
       _rotationController.reset();
       _rotationController.forward();
 
@@ -129,11 +168,21 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
     }
   }
 
+  // Navigate to the route corresponding to the selected index
+  void _navigateToRoute(int index) {
+    // Get the current context
+    final BuildContext ctx = context;
+
+    // Navigate to the route using pushReplacementNamed to replace the current route
+    // This ensures we don't build up the navigation stack
+    Navigator.of(ctx).pushReplacementNamed(_routes[index]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final screenWidth = MediaQuery.of(context).size.width;
-    final itemWidth = screenWidth / 5; // 5 items including Jajananku
+    final itemWidth = screenWidth / 4; // 4 items now (removed Add)
 
     return Container(
       height: 70 + bottomPadding,
@@ -215,15 +264,14 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
               ),
             ),
 
-            // Nav items
+            // Nav items - removed the Add item
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildNavItem(0, Icons.home_outlined, Icons.home_rounded, 'Home'),
-                _buildNavItem(1, Icons.add_circle_outline, Icons.add_circle, 'Add'),
-                _buildJajananItem(2, Icons.restaurant_menu_outlined, Icons.restaurant_menu, 'Jajananku'),
-                _buildNavItem(3, Icons.favorite_border_rounded, Icons.favorite, 'Favorite'),
-                _buildNavItem(4, Icons.photo_library_outlined, Icons.photo_library, 'Review'),
+                _buildJajananItem(1, Icons.restaurant_menu_outlined, Icons.restaurant_menu, 'Jajananku'),
+                _buildNavItem(2, Icons.favorite_border_rounded, Icons.favorite, 'Favorite'),
+                _buildNavItem(3, Icons.photo_library_outlined, Icons.photo_library, 'Review'),
               ],
             ),
           ],
@@ -239,7 +287,7 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
       onTap: () => _onItemTapped(index),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: MediaQuery.of(context).size.width / 5,
+        width: MediaQuery.of(context).size.width / 4, // 4 items now
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -323,7 +371,7 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
       onTap: () => _onItemTapped(index),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: MediaQuery.of(context).size.width / 5,
+        width: MediaQuery.of(context).size.width / 4, // 4 items now
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
@@ -441,4 +489,3 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
     );
   }
 }
-

@@ -262,32 +262,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                         ),
                       ],
                     ),
-                    // Add button
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.add_circle_outline,
-                          color: Color(0xFF70AE6E),
-                          size: 24,
-                        ),
-                        onPressed: _addNewReview,
-                      ),
-                    ).animate().fadeIn(duration: 600.ms).slideX(
-                      begin: 0.1,
-                      end: 0,
-                      curve: Curves.easeOutQuad,
-                    ),
+                    // Removed the Add button from here
                   ],
                 ),
               ),
@@ -357,17 +332,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
           ),
         ),
       ),
-      floatingActionButton: _isLoading || _reviewItems.isEmpty
-          ? null
-          : FloatingActionButton(
-        onPressed: _addNewReview,
-        backgroundColor: const Color(0xFF70AE6E),
-        child: const Icon(Icons.add),
-      ).animate().scale(
-        delay: 500.ms,
-        duration: 400.ms,
-        curve: Curves.elasticOut,
-      ),
+      // Removed the floating action button from here
       bottomNavigationBar: const NavBar(),
     );
   }
