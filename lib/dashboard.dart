@@ -1168,7 +1168,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                 ),
 
                 // Discount tag
-                if (snack.price < 5.0)
+                if (snack.price > 10000.0)
                   Positioned(
                     top: 8,
                     left: 8,
@@ -1227,7 +1227,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                         ],
                       ),
                       Text(
-                        '\$${snack.price.toStringAsFixed(2)}',
+                        'Rp${snack.price.toStringAsFixed(0)}',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
