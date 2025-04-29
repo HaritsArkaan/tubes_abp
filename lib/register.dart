@@ -1,9 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'dart:ui';
 
 // Add this import at the top of the file, below the existing imports
 import 'login.dart';
+import 'config.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({Key? key}) : super(key: key);
@@ -19,6 +23,8 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
   final _confirmPasswordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _isLoading = false;
+  bool _agreeToTerms = true;
 
   // Declare animation variables
   late AnimationController _animationController;
@@ -419,8 +425,12 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
             Row(
               children: [
                 Checkbox(
-                  value: true,
-                  onChanged: (value) {},
+                  value: _agreeToTerms,
+                  onChanged: (value) {
+                    setState(() {
+                      _agreeToTerms = value ?? true;
+                    });
+                  },
                   activeColor: Colors.green.shade700,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
@@ -482,15 +492,21 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
               splashColor: Colors.white.withOpacity(0.2),
               highlightColor: Colors.white.withOpacity(0.1),
               child: Center(
-                child: Text(
-                  'Create Account',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: size.width * 0.045,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
-                ),
+                child: _isLoading
+                    ? CircularProgressIndicator(
+                        valueColor:
+                        AlwaysStoppedAnimation<Color>(Colors.white),
+                        strokeWidth: 3,
+                      )
+                    : Text(
+                        'Create Account',
+                        style: TextStyle(
+                        color: Colors.white,
+                        fontSize: size.width * 0.045,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                        ),
+                    ),
               ),
             ),
           ),
@@ -543,7 +559,7 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     );
   }
 
-  void _validateAndRegister() {
+  Future<void> _validateAndRegister() async {
     // Validate fields
     if (_nameController.text.isEmpty ||
         _emailController.text.isEmpty ||
@@ -572,14 +588,60 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
       return;
     }
 
-    // If all validations pass, proceed with registration
-    // Here you would typically call your registration API
-    _showSuccessSnackBar('Account created successfully!');
+    // Check terms agreement
+    if (!_agreeToTerms) {
+      _showErrorSnackBar('Please agree to the Terms of Service and Privacy Policy');
+      return;
+    }
 
-    // Navigate to login page after successful registration
-    Future.delayed(const Duration(seconds: 2), () {
-      Navigator.pop(context);
+    // Show loading indicator
+    setState(() {
+      _isLoading = true;
     });
+
+    try {
+      // Call the registration API
+      final response = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/api/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'id':0,
+          'username': _nameController.text,
+          'password': _passwordController.text,
+          'role':'USER'
+        }),
+      );
+
+      // Hide loading indicator
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // If no token is returned, navigate to login page
+        _showSuccessSnackBar('Account created successfully! Please login.');
+
+        Future.delayed(const Duration(seconds: 1), () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginPage()),
+          );
+        });
+      } else {
+        // Handle error response
+        final errorData = json.decode(response.body);
+        _showErrorSnackBar(errorData['message'] ?? 'Registration failed. Please try again.');
+      }
+    } catch (error) {
+      // Hide loading indicator
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Handle network or other errors
+      _showErrorSnackBar('Network error. Please check your connection and try again.');
+      print('Registration error: $error');
+    }
   }
 
   void _showErrorSnackBar(String message) {
