@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Add this import at the top of the file, below the existing imports
+import 'config.dart';
+import 'dashboard.dart';
 import 'register.dart';
 
 class LoginPage extends StatefulWidget {
@@ -17,6 +22,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+  bool _isLoading = false;
 
   // Animation controllers and animations
   late AnimationController _animationController;
@@ -227,7 +233,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                     keyboardType: TextInputType.emailAddress,
                     style: const TextStyle(fontSize: 16),
                     decoration: InputDecoration(
-                      hintText: 'Email Address',
+                      hintText: 'Username',
                       hintStyle: TextStyle(color: Colors.grey.shade400),
                       prefixIcon: Icon(
                         Icons.email_outlined,
@@ -438,28 +444,78 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
   }
 
-  void _validateAndLogin() {
+  Future<void> _validateAndLogin() async {
     // Validate fields
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       _showErrorSnackBar('Please fill in all fields');
       return;
     }
 
-    // Validate email format
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(_emailController.text)) {
-      _showErrorSnackBar('Please enter a valid email address');
-      return;
-    }
+    // Show loading indicator
+    setState(() {
+      _isLoading = true;
+    });
 
     // If all validations pass, proceed with login
-    // Here you would typically call your login API
-    _showSuccessSnackBar('Login successful!');
+    try {
+      // Call the login API
+      final response = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/api/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'username': _emailController.text,
+          'password': _passwordController.text,
+        }),
+      );
 
-    // Navigate to home page after successful login
-    Future.delayed(const Duration(seconds: 2), () {
-      Navigator.pushReplacementNamed(context, '/home');
-    });
+      // Hide loading indicator
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (response.statusCode == 200) {
+        // Parse the response
+        final responseData = json.decode(response.body);
+
+        // Extract the JWT token - adjust based on your Spring Boot response structure
+        final String token = responseData['token'] ??
+        responseData['access_token'] ??
+        responseData['jwt'];
+
+        // Save the JWT token
+        await _saveToken(responseData['token']);
+
+        _showSuccessSnackBar('Login successful!');
+        print('Token: $token');
+
+        // Navigate to dashboard page after successful login
+        Future.delayed(const Duration(seconds: 1), () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => DashboardPage()),
+          );
+        });
+      } else {
+        // Handle error response
+        final errorData = json.decode(response.body);
+        _showErrorSnackBar(errorData['message'] ?? 'Login failed. Please try again.');
+      }
+    } catch (error) {
+      // Hide loading indicator
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Handle network or other errors
+      _showErrorSnackBar('Network error. Please check your connection and try again.');
+      print('Login error: $error');
+    }
+  }
+
+  // Save JWT token using SharedPreferences
+  Future<void> _saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('jwt_token', token);
   }
 
   void _showErrorSnackBar(String message) {
@@ -490,4 +546,3 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
   }
 }
-

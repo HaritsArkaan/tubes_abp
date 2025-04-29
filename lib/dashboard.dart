@@ -1,6 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:snack_hunt/services/auth_service.dart' show AuthService;
+import 'dart:async';
+import 'config.dart';
 import 'navbar.dart';
+import 'models/snack.dart';
+import 'services/api_service.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({Key? key}) : super(key: key);
@@ -13,6 +21,20 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   late AnimationController _animationController;
   late ScrollController _scrollController;
   bool _isScrolled = false;
+  String _userName = 'Guest';
+
+  // API service
+  final ApiService _apiService = ApiService();
+
+  // Data
+  List<Snack> _snacks = [];
+  List<Snack> _popularSnacks = [];
+  bool _isLoading = true;
+  String _errorMessage = '';
+
+  // Selected category
+  String _selectedCategory = 'All';
+  final List<String> _categories = ['All', 'Food', 'Drink', 'Dessert', 'Snack'];
 
   @override
   void initState() {
@@ -28,6 +50,120 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
           _isScrolled = _scrollController.offset > 20;
         });
       });
+
+    // Fetch username
+    _fetchUserName();
+
+    // Fetch data when the page loads
+    _fetchSnacks();
+  }
+
+  // Fetch snacks from API
+  Future<void> _fetchSnacks() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final snacks = await _apiService.getSnacks();
+
+      // Sort by rating to get popular snacks
+      final popularSnacks = List<Snack>.from(snacks)
+        ..sort((a, b) => b.rating.compareTo(a.rating));
+
+      setState(() {
+        _snacks = snacks;
+        _popularSnacks = popularSnacks.take(10).toList(); // Top 10 rated snacks
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load snacks. Please check your connection.';
+        _isLoading = false;
+      });
+      print('Error: $e');
+    }
+  }
+
+  // Filter snacks by category
+  void _filterByCategory(String category) {
+    setState(() {
+      _selectedCategory = category;
+    });
+
+    if (category == 'All') {
+      _fetchSnacks();
+    } else {
+      _fetchSnacksByCategory(category);
+    }
+  }
+
+
+
+  // Fetch snacks by category
+  Future<void> _fetchSnacksByCategory(String category) async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final snacks = await _apiService.getSnacksByCategory(category);
+
+      setState(() {
+        _snacks = snacks;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load snacks. Please check your connection.';
+        _isLoading = false;
+      });
+      print('Error: $e');
+    }
+  }
+
+  void _fetchUserName() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    print('Token: $token');
+    if (token != null) {
+      try {
+        // Simpan token (opsional jika sudah tersimpan sebelumnya)
+        await prefs.setString('jwt_token', token);
+
+        // Pecah token menjadi 3 bagian
+        final parts = token.split('.');
+        if (parts.length != 3) {
+          throw Exception('Token tidak valid');
+        }
+
+        // Decode payload
+        final payload = base64Url.normalize(parts[1]); // normalisasi sebelum decode
+        final decoded = utf8.decode(base64Url.decode(payload));
+
+        // Parse JSON dari payload
+        final payloadMap = json.decode(decoded);
+        final userName = payloadMap['sub']; // ambil 'sub' dari payload
+
+        // Update UI
+        setState(() {
+          _userName = userName ?? 'Guest';
+        });
+
+        print('Username (from sub): $_userName');
+      } catch (e) {
+        print('Gagal mem-parse token: $e');
+        setState(() {
+          _userName = 'Guest';
+        });
+      }
+    } else {
+      setState(() {
+        _userName = 'Guest';
+      });
+    }
   }
 
   @override
@@ -78,14 +214,19 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                         child: child,
                       );
                     },
-                    child: SingleChildScrollView(
+                    child: _isLoading
+                        ? _buildLoadingIndicator()
+                        : _errorMessage.isNotEmpty
+                        ? _buildErrorView()
+                        : SingleChildScrollView(
                       controller: _scrollController,
                       physics: const BouncingScrollPhysics(),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildSearchBar(context),
-                          _buildHighlightMenu(context),
+                          if (_popularSnacks.isNotEmpty)
+                            _buildHighlightMenu(context, _popularSnacks[0]),
                           _buildCategories(context),
                           _buildPopularPicks(context),
                           const SizedBox(height: 100), // Space for bottom nav
@@ -99,6 +240,64 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
           ],
         ),
         bottomNavigationBar: const NavBar(),
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.green.shade700),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Loading snacks...',
+            style: TextStyle(
+              color: Colors.green.shade700,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            color: Colors.red.shade700,
+            size: 60,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _errorMessage,
+            style: TextStyle(
+              color: Colors.red.shade700,
+              fontSize: 16,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: _fetchSnacks,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Try Again'),
+          ),
+        ],
       ),
     );
   }
@@ -157,6 +356,13 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                   child: Image.asset(
                     'images/logo.png',
                     fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(
+                        Icons.fastfood_rounded,
+                        size: size.height * 0.03,
+                        color: Colors.green.shade700,
+                      );
+                    },
                   ),
                 ),
               ),
@@ -204,6 +410,15 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           child: Image.asset(
                             'images/profile.jpg',
                             fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return CircleAvatar(
+                                backgroundColor: Colors.green.shade200,
+                                child: Icon(
+                                  Icons.person,
+                                  color: Colors.green.shade700,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -215,8 +430,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text(
-                              'Hello, Emily!',
+                            Text(
+                              'Hello, $_userName!',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -342,6 +557,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                             fontSize: 14,
                           ),
                         ),
+                        onSubmitted: (value) {
+                          // Implement search functionality
+                        },
                       ),
                     ),
                   ],
@@ -369,6 +587,13 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
             child: GestureDetector(
               onTap: () {
                 // Add filter functionality
+                showModalBottomSheet(
+                  context: context,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  builder: (context) => _buildFilterBottomSheet(context),
+                );
               },
               child: Container(
                 height: size.height * 0.055,
@@ -397,7 +622,85 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     );
   }
 
-  Widget _buildHighlightMenu(BuildContext context) {
+  Widget _buildFilterBottomSheet(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Filter Snacks',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2E3E5C),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Categories',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2E3E5C),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: _categories.map((category) {
+              return FilterChip(
+                label: Text(category),
+                selected: _selectedCategory == category,
+                onSelected: (selected) {
+                  Navigator.pop(context);
+                  _filterByCategory(category);
+                },
+                backgroundColor: Colors.grey[200],
+                selectedColor: Colors.green[100],
+                checkmarkColor: Colors.green[700],
+                labelStyle: TextStyle(
+                  color: _selectedCategory == category
+                      ? Colors.green[700]
+                      : Colors.grey[700],
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.grey[700]),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _fetchSnacks(); // Reset filters
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green[700],
+                ),
+                child: const Text('Reset Filters'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHighlightMenu(BuildContext context, Snack snack) {
     final size = MediaQuery.of(context).size;
 
     return AnimatedBuilder(
@@ -428,10 +731,45 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
               // Image with parallax effect
               Positioned.fill(
                 child: Hero(
-                  tag: 'risoles_hero',
-                  child: Image.asset(
+                  tag: 'snack_${snack.id}',
+                  child: snack.imageUrl.isNotEmpty
+                      ? Image.network(
+                    AppConfig.baseUrl + snack.imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Image.asset(
+                        'images/risoles.jpg',
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Colors.grey[300],
+                            child: const Center(
+                              child: Icon(
+                                Icons.image_not_supported,
+                                color: Colors.grey,
+                                size: 50,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  )
+                      : Image.asset(
                     'images/risoles.jpg',
                     fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey[300],
+                        child: const Center(
+                          child: Icon(
+                            Icons.image_not_supported,
+                            color: Colors.grey,
+                            size: 50,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -460,7 +798,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Risoles Mozzarella',
+                      snack.name,
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: size.width * 0.06,
@@ -478,7 +816,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                     Row(
                       children: [
                         Text(
-                          'Risoles',
+                          snack.type,
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: size.width * 0.04,
@@ -500,7 +838,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '4.8',
+                                snack.rating.toStringAsFixed(1),
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: size.width * 0.03,
@@ -558,14 +896,20 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
               ],
             ),
             SizedBox(height: size.height * 0.02),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildCategoryItem(context, 'Food', Colors.orange),
-                _buildCategoryItem(context, 'Drink', Colors.pink),
-                _buildCategoryItem(context, 'Dessert', Colors.red),
-                _buildCategoryItem(context, 'Snack', const Color(0xFFBE8C63)),
-              ],
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  _buildCategoryItem(context, 'Food', Colors.orange),
+                  SizedBox(width: size.width * 0.04),
+                  _buildCategoryItem(context, 'Drink', Colors.pink),
+                  SizedBox(width: size.width * 0.04),
+                  _buildCategoryItem(context, 'Dessert', Colors.red),
+                  SizedBox(width: size.width * 0.04),
+                  _buildCategoryItem(context, 'Snack', const Color(0xFFBE8C63)),
+                ],
+              ),
             ),
           ],
         ),
@@ -579,7 +923,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
 
     return GestureDetector(
       onTap: () {
-        // Navigate to category
+        // Filter by category
+        _filterByCategory(title);
       },
       child: Column(
         children: [
@@ -588,7 +933,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
             height: itemSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: color.withOpacity(0.1),
+              color: _selectedCategory == title
+                  ? color.withOpacity(0.3)
+                  : color.withOpacity(0.1),
               boxShadow: [
                 BoxShadow(
                   color: color.withOpacity(0.2),
@@ -604,6 +951,13 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                 width: itemSize * 0.6,
                 height: itemSize * 0.6,
                 fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(
+                    Icons.fastfood_rounded,
+                    size: itemSize * 0.6,
+                    color: color,
+                  );
+                },
               ),
             ),
           ),
@@ -613,7 +967,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
             style: TextStyle(
               fontSize: size.width * 0.035,
               fontWeight: FontWeight.w500,
-              color: const Color(0xFF2E3E5C),
+              color: _selectedCategory == title
+                  ? color
+                  : const Color(0xFF2E3E5C),
             ),
           ),
         ],
@@ -657,6 +1013,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                 TextButton(
                   onPressed: () {
                     // View all popular picks
+                    _filterByCategory('All');
                   },
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.green.shade700,
@@ -678,43 +1035,32 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
           SizedBox(height: size.height * 0.02),
           SizedBox(
             height: size.width * 0.55,
-            child: ListView(
+            child: _popularSnacks.isEmpty
+                ? Center(
+              child: Text(
+                'No snacks available',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 16,
+                ),
+              ),
+            )
+                : ListView.builder(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               padding: EdgeInsets.symmetric(horizontal: size.width * 0.04),
-              children: [
-                _buildPopularItem(
-                  context,
-                  'Corn dog',
-                  '4.5',
-                  '\$5.00',
-                  'images/corndog.jpg',
-                ),
-                SizedBox(width: size.width * 0.04),
-                _buildPopularItem(
-                  context,
-                  'Mochi Daifuku',
-                  '4.8',
-                  '\$6.50',
-                  'images/mochi.jpg',
-                ),
-                SizedBox(width: size.width * 0.04),
-                _buildPopularItem(
-                  context,
-                  'Boba',
-                  '4.7',
-                  '\$4.00',
-                  'images/boba.jpg',
-                ),
-                SizedBox(width: size.width * 0.04),
-                _buildPopularItem(
-                  context,
-                  'Takoyaki',
-                  '4.6',
-                  '\$7.50',
-                  'images/corndog.jpg', // Replace with takoyaki image
-                ),
-              ],
+              itemCount: _popularSnacks.length,
+              itemBuilder: (context, index) {
+                final snack = _popularSnacks[index];
+                return Padding(
+                  padding: EdgeInsets.only(
+                    right: index < _popularSnacks.length - 1
+                        ? size.width * 0.04
+                        : 0,
+                  ),
+                  child: _buildPopularItem(context, snack),
+                );
+              },
             ),
           ),
         ],
@@ -722,7 +1068,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     );
   }
 
-  Widget _buildPopularItem(BuildContext context, String name, String rating, String price, String image) {
+  Widget _buildPopularItem(BuildContext context, Snack snack) {
     final size = MediaQuery.of(context).size;
     final itemWidth = size.width * 0.4;
 
@@ -752,11 +1098,42 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                 // Food image
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: Image.asset(
-                    image,
+                  child: snack.imageUrl.isNotEmpty
+                      ? Image.network(
+                    AppConfig.baseUrl+snack.imageUrl,
                     height: itemWidth * 0.75,
                     width: double.infinity,
                     fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: itemWidth * 0.75,
+                        color: Colors.grey[300],
+                        child: const Center(
+                          child: Icon(
+                            Icons.image_not_supported,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                      : Image.asset(
+                    'images/corndog.jpg',
+                    height: itemWidth * 0.75,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: itemWidth * 0.75,
+                        color: Colors.grey[300],
+                        child: const Center(
+                          child: Icon(
+                            Icons.image_not_supported,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
 
@@ -791,7 +1168,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                 ),
 
                 // Discount tag
-                if (name == 'Corn dog')
+                if (snack.price < 5.0)
                   Positioned(
                     top: 8,
                     left: 8,
@@ -819,7 +1196,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    name,
+                    snack.name,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -841,7 +1218,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            rating,
+                            snack.rating.toStringAsFixed(1),
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],
@@ -850,7 +1227,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                         ],
                       ),
                       Text(
-                        price,
+                        '\$${snack.price.toStringAsFixed(2)}',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -868,4 +1245,3 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     );
   }
 }
-
