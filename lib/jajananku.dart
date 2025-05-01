@@ -1,98 +1,20 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'navbar.dart'; // Import your navbar
-import 'editJajanan.dart'; // Import the edit dialog
-
-// Model class for snack items
-class SnackItem {
-  final String id;
-  final String name;
-  final String imageUrl;
-  final String price;
-  final String type;
-  final String location;
-  final double rating;
-  final int reviewCount;
-
-  SnackItem({
-    required this.id,
-    required this.name,
-    required this.imageUrl,
-    required this.price,
-    required this.type,
-    required this.location,
-    required this.rating,
-    required this.reviewCount,
-  });
-}
-
-// Sample data with actual image URLs
-final List<SnackItem> snackItems = [
-  SnackItem(
-    id: '1',
-    name: 'Risoles Mayo',
-    imageUrl: 'https://images.unsplash.com/photo-1558745010-d2a3c21762ab?q=80&w=400',
-    price: '5.000',
-    type: 'Snack',
-    location: 'Jl. Kebon Jeruk No. 10',
-    rating: 4.5,
-    reviewCount: 24,
-  ),
-  SnackItem(
-    id: '2',
-    name: 'Boba Milk Tea',
-    imageUrl: 'https://images.unsplash.com/photo-1558857563-b371033873b8?q=80&w=400',
-    price: '15.000',
-    type: 'Drink',
-    location: 'Jl. Sudirman No. 45',
-    rating: 4.8,
-    reviewCount: 36,
-  ),
-  SnackItem(
-    id: '3',
-    name: 'Mochi Ice Cream',
-    imageUrl: 'https://images.unsplash.com/photo-1631206753348-db44968fd440?q=80&w=400',
-    price: '10.000',
-    type: 'Dessert',
-    location: 'Jl. Gatot Subroto No. 22',
-    rating: 4.2,
-    reviewCount: 18,
-  ),
-  SnackItem(
-    id: '4',
-    name: 'Corn Dog',
-    imageUrl: 'https://images.unsplash.com/photo-1619881590738-a111d176d906?q=80&w=400',
-    price: '12.000',
-    type: 'Food',
-    location: 'Jl. Thamrin No. 33',
-    rating: 4.6,
-    reviewCount: 42,
-  ),
-  SnackItem(
-    id: '5',
-    name: 'Toppokki',
-    imageUrl: 'https://images.unsplash.com/photo-1635363638580-c2809d049eee?q=80&w=400',
-    price: '18.000',
-    type: 'Food',
-    location: 'Jl. Asia Afrika No. 15',
-    rating: 4.7,
-    reviewCount: 32,
-  ),
-  SnackItem(
-    id: '6',
-    name: 'Ice Jeruk',
-    imageUrl: 'https://images.unsplash.com/photo-1560526860-1f0e56046c85?q=80&w=400',
-    price: '8.000',
-    type: 'Drink',
-    location: 'Jl. Cihampelas No. 50',
-    rating: 4.5,
-    reviewCount: 18,
-  ),
-];
+import 'package:shared_preferences/shared_preferences.dart';
+import 'models/reviewStatistic.dart';
+import 'navbar.dart';
+import 'editJajanan.dart';
+import 'models/snack.dart';
+import 'models/reviewStatistic.dart';
+import 'services/api_snack.dart';
+import 'services/api_reviewStatistic.dart';
+import 'config.dart';
 
 class JajananKu extends StatefulWidget {
   const JajananKu({Key? key}) : super(key: key);
@@ -103,28 +25,165 @@ class JajananKu extends StatefulWidget {
 
 class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMixin {
   bool _isLoading = true;
-  final List<SnackItem> _snackItems = snackItems;
+  bool _isError = false;
+  String _errorMessage = '';
+  List<Snack> _snacks = [];
+  Map<int, ReviewStatistic> _reviewStats = {};
+
+  // API services
+  final ApiService _apiService = ApiService();
+  final ApiReviewStatistic _reviewStatService = ApiReviewStatistic();
+
   OverlayEntry? _overlayEntry;
   late AnimationController _buttonAnimationController;
   bool _isButtonHovered = false;
 
+  // User info
+  int? _userId;
+  String? _token;
+
   @override
   void initState() {
     super.initState();
-    // Simulate loading delay
-    Future.delayed(const Duration(milliseconds: 1200), () {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    });
 
     // Initialize animation controller for the add button
     _buttonAnimationController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+
+    // Load user data and fetch snacks
+    _loadUserDataAndFetchSnacks();
+  }
+
+  Future<void> _loadUserDataAndFetchSnacks() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token != null) {
+        // Parse JWT token to get user ID
+        final parts = token.split('.');
+        if (parts.length == 3) {
+          final payload = parts[1].padRight(4 * ((parts[1].length + 3) ~/ 4), '=');
+          final normalized = base64Url.normalize(payload);
+          final decoded = utf8.decode(base64Url.decode(normalized));
+          final payloadMap = json.decode(decoded);
+
+          setState(() {
+            _userId = payloadMap['id'] as int?;
+            _token = token;
+          });
+
+          // Now fetch snacks with the user ID
+          if (_userId != null) {
+            _fetchSnacks();
+          } else {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _isError = true;
+                _errorMessage = 'User ID not found in token';
+              });
+            }
+          }
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isError = true;
+            _errorMessage = 'Authentication token not found';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isError = true;
+          _errorMessage = 'Error loading user data: $e';
+        });
+      }
+      print('Error loading user data: $e');
+    }
+  }
+
+  Future<void> _fetchSnacks() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+      _isError = false;
+      _errorMessage = '';
+    });
+
+    try {
+      if (_userId == null || _token == null) {
+        throw Exception('User ID or token is missing');
+      }
+
+      // Use a timeout to prevent hanging indefinitely
+      final snacks = await _apiService.getSnacksByUserId(_userId!, _token!)
+          .timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Request timed out after 10 seconds');
+        },
+      );
+
+      // Only update state if the widget is still mounted
+      if (mounted) {
+        setState(() {
+          _snacks = snacks;
+          _isLoading = false;
+        });
+
+        // Fetch review statistics for each snack
+        _fetchReviewStatistics();
+      }
+    } catch (e) {
+      // Only update state if the widget is still mounted
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isError = true;
+          _errorMessage = 'Failed to load snacks: ${e.toString()}';
+        });
+      }
+      print('Error fetching snacks: $e');
+    }
+  }
+
+  Future<void> _fetchReviewStatistics() async {
+    if (_snacks.isEmpty || !mounted) return;
+
+    try {
+      for (var snack in _snacks) {
+        if (!mounted) return; // Check if still mounted before each API call
+
+        try {
+          final stats = await _reviewStatService.getReviewStatistics(snack.id)
+              .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              throw TimeoutException('Review stats request timed out');
+            },
+          );
+
+          if (mounted) {
+            setState(() {
+              _reviewStats[snack.id] = stats;
+            });
+          }
+        } catch (e) {
+          print('Error fetching review stats for snack ${snack.id}: $e');
+          // Continue with other snacks even if one fails
+        }
+      }
+    } catch (e) {
+      print('Error in review statistics batch processing: $e');
+    }
   }
 
   @override
@@ -145,6 +204,9 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
   void _showToast(String message) {
     // Remove any existing overlay first
     _removeOverlay();
+
+    // Only proceed if the context is still valid
+    if (!mounted) return;
 
     // Create a new overlay entry
     _overlayEntry = OverlayEntry(
@@ -197,34 +259,59 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
 
     // Auto-remove after 2 seconds
     Future.delayed(const Duration(seconds: 2), () {
-      if (_overlayEntry != null) {
+      if (_overlayEntry != null && mounted) {
         _removeOverlay();
       }
     });
   }
 
-  void _editSnack(SnackItem item) {
+  void _editSnack(Snack snack) {
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return EditSnackDialog(
-          snackItem: item,
-          onSave: (updatedItem) {
-            setState(() {
-              // Find the index of the item to update
-              final index = _snackItems.indexWhere((snack) => snack.id == updatedItem.id);
-              if (index != -1) {
-                // Replace the old item with the updated one
-                _snackItems[index] = updatedItem;
+          snack: snack,
+          onSave: (updatedSnack) async {
+            try {
+              if (_token == null) {
+                throw Exception('Authentication token not found');
               }
-            });
+
+              final result = await _apiService.updateSnack(updatedSnack, _token!)
+                  .timeout(
+                const Duration(seconds: 10),
+                onTimeout: () {
+                  throw TimeoutException('Update request timed out');
+                },
+              );
+
+              if (mounted) {
+                setState(() {
+                  // Find and replace the updated snack in the list
+                  final index = _snacks.indexWhere((s) => s.id == result.id);
+                  if (index != -1) {
+                    _snacks[index] = result;
+                  }
+                });
+                _showToast('${result.name} berhasil diperbarui');
+              }
+            } catch (e) {
+              if (mounted) {
+                _showToast('Gagal memperbarui: ${e.toString()}');
+              }
+              print('Error updating snack: $e');
+            }
           },
         );
       },
     );
   }
 
-  void _deleteSnack(SnackItem item) {
+  void _deleteSnack(Snack snack) {
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -240,7 +327,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
             ),
           ),
           content: Text(
-            'Apakah anda yakin ingin menghapus ${item.name}?',
+            'Apakah anda yakin ingin menghapus ${snack.name}?',
             style: GoogleFonts.poppins(),
           ),
           actions: [
@@ -259,12 +346,35 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              onPressed: () {
-                setState(() {
-                  _snackItems.remove(item);
-                });
+              onPressed: () async {
                 Navigator.pop(context);
-                _showToast('${item.name} berhasil dihapus');
+
+                try {
+                  if (_token == null) {
+                    throw Exception('Authentication token not found');
+                  }
+
+                  await _apiService.deleteSnack(snack.id, _token!)
+                      .timeout(
+                    const Duration(seconds: 10),
+                    onTimeout: () {
+                      throw TimeoutException('Delete request timed out');
+                    },
+                  );
+
+                  if (mounted) {
+                    setState(() {
+                      _snacks.removeWhere((s) => s.id == snack.id);
+                      _reviewStats.remove(snack.id);
+                    });
+                    _showToast('${snack.name} berhasil dihapus');
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    _showToast('Gagal menghapus: ${e.toString()}');
+                  }
+                  print('Error deleting snack: $e');
+                }
               },
               child: Text(
                 'Ya, Hapus!',
@@ -277,9 +387,11 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
     );
   }
 
-  void _viewSnackDetail(SnackItem item) {
-    // Mock navigation
-    _showToast('Detail: ${item.name}');
+  void _viewSnackDetail(Snack snack) {
+    // Navigate to detail page
+    _showToast('Detail: ${snack.name}');
+    // You can implement actual navigation here
+    // Navigator.of(context).pushNamed('/detailJajanan', arguments: snack);
   }
 
   void _addNewSnack() {
@@ -322,6 +434,21 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                         Image.asset(
                           'images/logo.png',
                           height: 32,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              height: 32,
+                              width: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF70AE6E).withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.restaurant,
+                                color: Color(0xFF70AE6E),
+                                size: 20,
+                              ),
+                            );
+                          },
                         ),
                         const SizedBox(width: 12),
                         Text(
@@ -467,26 +594,20 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
               Expanded(
                 child: _isLoading
                     ? _buildLoadingGrid(size)
-                    : _snackItems.isEmpty
+                    : _isError
+                    ? _buildErrorState(size)
+                    : _snacks.isEmpty
                     ? _buildEmptyState(size)
                     : RefreshIndicator(
                   color: const Color(0xFF70AE6E),
-                  onRefresh: () async {
-                    setState(() {
-                      _isLoading = true;
-                    });
-                    await Future.delayed(const Duration(seconds: 1));
-                    setState(() {
-                      _isLoading = false;
-                    });
-                  },
+                  onRefresh: _fetchSnacks,
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: size.width * 0.04),
                     child: MasonryGridView.count(
                       crossAxisCount: 2,
                       mainAxisSpacing: 15,
                       crossAxisSpacing: 15,
-                      itemCount: _snackItems.length,
+                      itemCount: _snacks.length,
                       itemBuilder: (context, index) {
                         return _buildSnackItem(index, size)
                             .animate()
@@ -509,8 +630,70 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
           ),
         ),
       ),
-      // No floating action button as requested
       bottomNavigationBar: const NavBar(),
+    );
+  }
+
+  Widget _buildErrorState(Size size) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red[700],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Terjadi Kesalahan',
+              style: GoogleFonts.poppins(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.red[700],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _errorMessage,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _fetchSnacks,
+              icon: const Icon(Icons.refresh),
+              label: Text(
+                'Coba Lagi',
+                style: GoogleFonts.poppins(),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF70AE6E),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -561,9 +744,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
           ).animate().fadeIn(delay: 400.ms, duration: 400.ms),
           const SizedBox(height: 32),
           ElevatedButton.icon(
-            onPressed: () {
-              Navigator.of(context).pushNamed('/tambahJajanan');
-            },
+            onPressed: _addNewSnack,
             icon: const Icon(Icons.add),
             label: Text(
               'Tambah Jajanan Sekarang',
@@ -671,12 +852,18 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
   }
 
   Widget _buildSnackItem(int index, Size size) {
-    final item = _snackItems[index];
+    final snack = _snacks[index];
+    // Get review stats if available
+    final reviewStat = _reviewStats[snack.id];
+    final rating = reviewStat?.averageRating ?? 0.0;
+    final reviewCount = reviewStat?.reviewCount ?? 0;
+    print('Review Count: $reviewCount Review Rating: $rating' );
+
     // Vary the height for visual interest
     final heightFactor = 1.2 + (index % 3) * 0.1;
 
     return GestureDetector(
-      onTap: () => _viewSnackDetail(item),
+      onTap: () => _viewSnackDetail(snack),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -699,9 +886,9 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   child: Hero(
-                    tag: 'snack-${item.id}',
+                    tag: 'snack-${snack.id}',
                     child: CachedNetworkImage(
-                      imageUrl: item.imageUrl,
+                      imageUrl: AppConfig.baseUrl + snack.imageUrl,
                       placeholder: (context, url) => Container(
                         height: size.width * 0.5 * heightFactor,
                         color: Colors.grey[200],
@@ -741,7 +928,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                       ],
                     ),
                     child: Text(
-                      'Rp ${item.price}',
+                      'Rp ${snack.price.toStringAsFixed(0)}',
                       style: GoogleFonts.poppins(
                         color: const Color(0xFF70AE6E),
                         fontSize: 12,
@@ -757,7 +944,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: _getTypeColor(item.type),
+                      color: _getTypeColor(snack.type),
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
@@ -768,7 +955,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                       ],
                     ),
                     child: Text(
-                      item.type,
+                      snack.type,
                       style: GoogleFonts.poppins(
                         color: Colors.white,
                         fontSize: 12,
@@ -788,7 +975,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                 children: [
                   // Name
                   Text(
-                    item.name,
+                    snack.name,
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -808,7 +995,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${item.rating} (${item.reviewCount})',
+                        '${rating} (${reviewCount})',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -830,7 +1017,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          item.location,
+                          snack.location,
                           style: GoogleFonts.poppins(
                             fontSize: 12,
                             color: Colors.grey[600],
@@ -852,7 +1039,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                           'Edit',
                           Icons.edit_outlined,
                           const Color(0xFF70AE6E),
-                              () => _editSnack(item),
+                              () => _editSnack(snack),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -861,7 +1048,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                           'Hapus',
                           Icons.delete_outline,
                           Colors.red,
-                              () => _deleteSnack(item),
+                              () => _deleteSnack(snack),
                         ),
                       ),
                     ],

@@ -494,19 +494,19 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
               child: Center(
                 child: _isLoading
                     ? CircularProgressIndicator(
-                        valueColor:
-                        AlwaysStoppedAnimation<Color>(Colors.white),
-                        strokeWidth: 3,
-                      )
+                  valueColor:
+                  AlwaysStoppedAnimation<Color>(Colors.white),
+                  strokeWidth: 3,
+                )
                     : Text(
-                        'Create Account',
-                        style: TextStyle(
-                        color: Colors.white,
-                        fontSize: size.width * 0.045,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                        ),
-                    ),
+                  'Create Account',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: size.width * 0.045,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                ),
               ),
             ),
           ),
@@ -672,4 +672,3 @@ class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderSt
     );
   }
 }
-

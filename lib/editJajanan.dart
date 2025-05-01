@@ -4,17 +4,19 @@ import 'package:image_picker/image_picker.dart';
 import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'dart:io';
+import 'models/snack.dart';
+import 'config.dart'; // For base URL
 
 // Import the SnackItem class from jajananku.dart
 import 'jajananku.dart' show SnackItem;
 
 class EditSnackDialog extends StatefulWidget {
-  final SnackItem snackItem;
-  final Function(SnackItem) onSave;
+  final Snack snack;
+  final Function(Snack) onSave;
 
   const EditSnackDialog({
     Key? key,
-    required this.snackItem,
+    required this.snack,
     required this.onSave,
   }) : super(key: key);
 
@@ -29,27 +31,27 @@ class _EditSnackDialogState extends State<EditSnackDialog> {
   late TextEditingController _contactController;
   File? _imageFile;
   late String _selectedType;
-  late String _selectedPrice;
+  String _selectedPrice = '';
   final ImagePicker _picker = ImagePicker();
 
-  final List<String> _priceOptions = ['5.000', '7.000', '10.000', '15.000'];
+  final List<String> _priceOptions = ['5000', '7000', '10000', '15000'];
   final List<String> _typeOptions = ['Food', 'Drink', 'Dessert', 'Snack'];
 
   @override
   void initState() {
     super.initState();
     // Initialize controllers with existing data
-    _nameController = TextEditingController(text: widget.snackItem.name);
-    _customPriceController = TextEditingController();
-    _addressController = TextEditingController(text: widget.snackItem.location);
-    _contactController = TextEditingController(text: ""); // Assuming no contact in model
-    _selectedType = widget.snackItem.type;
-    _selectedPrice = widget.snackItem.price;
+    _nameController = TextEditingController(text: widget.snack.name);
+    _customPriceController = TextEditingController(text: widget.snack.price.toString());
+    _addressController = TextEditingController(text: widget.snack.location ?? "");
+    _contactController = TextEditingController(text: widget.snack.contact ?? "");
+    _selectedType = widget.snack.type;
 
-    // If the price is not in the predefined options, set it in the custom field
-    if (!_priceOptions.contains(_selectedPrice)) {
-      _customPriceController.text = _selectedPrice;
-      _selectedPrice = '';
+    // Check if the price matches any predefined options
+    String priceString = widget.snack.price.toStringAsFixed(0);
+    if (_priceOptions.contains(priceString)) {
+      _selectedPrice = priceString;
+      _customPriceController.clear();
     }
   }
 
@@ -95,15 +97,25 @@ class _EditSnackDialogState extends State<EditSnackDialog> {
 
   void _saveSnack() {
     // Create updated snack item
-    final updatedSnack = SnackItem(
-      id: widget.snackItem.id,
+    double price;
+    if (_selectedPrice.isNotEmpty) {
+      price = double.parse(_selectedPrice);
+    } else if (_customPriceController.text.isNotEmpty) {
+      price = double.parse(_customPriceController.text);
+    } else {
+      price = widget.snack.price; // Keep original if nothing selected
+    }
+
+    final updatedSnack = Snack(
+      id: widget.snack.id,
       name: _nameController.text,
-      imageUrl: widget.snackItem.imageUrl, // Keep original URL since we can't upload in this example
-      price: _selectedPrice.isNotEmpty ? _selectedPrice : _customPriceController.text,
+      imageUrl: widget.snack.imageUrl, // Keep original URL since we can't upload in this example
+      price: price,
       type: _selectedType,
       location: _addressController.text,
-      rating: widget.snackItem.rating, // Keep original rating
-      reviewCount: widget.snackItem.reviewCount, // Keep original review count
+      rating: widget.snack.rating, // Keep original rating
+      contact: _contactController.text,
+      userId: widget.snack.userId, image: '', seller: '', // Keep original userId
     );
 
     // Call the onSave callback
@@ -188,8 +200,15 @@ class _EditSnackDialogState extends State<EditSnackDialog> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       image: DecorationImage(
-                        image: NetworkImage(widget.snackItem.imageUrl),
+                        image: NetworkImage(
+                          widget.snack.imageUrl.isNotEmpty
+                              ? AppConfig.baseUrl + widget.snack.imageUrl
+                              : 'https://via.placeholder.com/150',
+                        ),
                         fit: BoxFit.cover,
+                        onError: (exception, stackTrace) {
+                          print('Error loading image: $exception');
+                        },
                       ),
                     ),
                     child: Container(
@@ -484,4 +503,3 @@ class _EditSnackDialogState extends State<EditSnackDialog> {
     );
   }
 }
-

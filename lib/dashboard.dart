@@ -8,7 +8,7 @@ import 'package:snack_hunt/services/auth_service.dart' show AuthService;
 import 'config.dart';
 import 'navbar.dart';
 import 'models/snack.dart';
-import 'services/api_service.dart';
+import 'services/api_snack.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({Key? key}) : super(key: key);

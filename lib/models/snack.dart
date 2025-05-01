@@ -40,4 +40,20 @@ class Snack {
       userId: json['userId'] as int,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'price': price,
+      'image': image,
+      'image_URL': imageUrl,
+      'seller': seller,
+      'contact': contact,
+      'location': location,
+      'rating': rating,
+      'type': type,
+      'userId': userId,
+    };
+  }
 }

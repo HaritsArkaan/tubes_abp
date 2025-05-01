@@ -479,8 +479,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
         // Extract the JWT token - adjust based on your Spring Boot response structure
         final String token = responseData['token'] ??
-        responseData['access_token'] ??
-        responseData['jwt'];
+            responseData['access_token'] ??
+            responseData['jwt'];
 
         // Save the JWT token
         await _saveToken(responseData['token']);
