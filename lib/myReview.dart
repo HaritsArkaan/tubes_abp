@@ -1,10 +1,19 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'navbar.dart';
+import 'config.dart';
+import 'models/review.dart';
+import 'models/snack.dart';
+import 'models/reviewStatistic.dart';
+import 'services/api_review.dart';
+import 'services/api_snack.dart';
+import 'services/api_review.dart';
 
 class MyReviewPage extends StatefulWidget {
   const MyReviewPage({Key? key}) : super(key: key);
@@ -15,19 +24,180 @@ class MyReviewPage extends StatefulWidget {
 
 class _MyReviewPageState extends State<MyReviewPage> {
   bool _isLoading = true;
-  final List<ReviewItem> _reviewItems = reviewItems;
+  bool _hasError = false;
+  String _errorMessage = '';
+
+  // API services
+  final ApiReview _reviewService = ApiReview();
+  final ApiService _snackService = ApiService();
+  final ApiReview _reviewStatService = ApiReview();
+
+  // Data
+  List<Review> _reviews = [];
+  Map<int, Snack> _snacks = {};
+  Map<int, ReviewStatistic> _reviewStats = {};
 
   @override
   void initState() {
     super.initState();
-    // Simulate loading delay
-    Future.delayed(const Duration(milliseconds: 1200), () {
+    _fetchUserReviews();
+  }
+
+  // Fetch reviews by user ID
+  Future<void> _fetchUserReviews() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+      _errorMessage = '';
+    });
+
+    try {
+      // Get user ID from shared preferences
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+      final userId = prefs.getInt('user_id');
+
+      if (userId == null || token == null) {
+        throw Exception('User ID or Token not found. Please log in again.');
+      }
+
+      // Fetch reviews by user ID
+      final reviews = await _reviewService.getReviewsByUserId(userId, token)
+          .timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Request timed out');
+        },
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _reviews = reviews;
+      });
+
+      // Fetch snack details and review statistics for each review
+      await _fetchSnackDetails();
+
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _hasError = true;
+        _errorMessage = 'Failed to load reviews: ${e.toString()}';
+        print('Error fetching reviews: $e');
+      });
+    } finally {
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
       }
-    });
+    }
+  }
+
+  // Fetch snack details for each review
+  Future<void> _fetchSnackDetails() async {
+    if (_reviews.isEmpty) return;
+
+    try {
+      // Step 1: First fetch all snack details
+      print('Fetching snack details for ${_reviews.length} reviews');
+      for (final review in _reviews) {
+        await _fetchSnackDetail(review.snackId);
+      }
+
+      // Step 2: Only after all snacks are fetched, fetch review statistics
+      print('Snacks loaded: ${_snacks.length}. Now fetching review statistics.');
+      if (_snacks.isNotEmpty) {
+        await _fetchReviewStatistics();
+      } else {
+        print('No snacks were loaded, skipping review statistics fetch.');
+      }
+    } catch (e) {
+      print('Error fetching additional data: $e');
+      // Continue even if some requests fail
+    }
+  }
+
+  // Fetch snack detail by ID
+  Future<void> _fetchSnackDetail(int snackId) async {
+    try {
+      final snack = await _snackService.getSnackById(snackId)
+          .timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          throw TimeoutException('Snack detail request timed out');
+        },
+      );
+      print('snack: ${snack.id}');
+
+      if (mounted) {
+        setState(() {
+          _snacks[snackId] = snack;
+        });
+      }
+    } catch (e) {
+      print('Error fetching snack $snackId: $e');
+      // Don't set error state, just log it
+    }
+  }
+
+  // Fetch review statistics by snack ID
+  Future<void> _fetchReviewStatistics() async {
+    if (_snacks.isEmpty) {
+      print('No snacks to fetch review statistics for.');
+      return;
+    }
+    if (!mounted) return;
+
+    try {
+      print('Fetching review statistics for ${_snacks.length} snacks');
+      for (var snackId in _snacks.keys) {
+        if (!mounted) return; // Check if still mounted before each API call
+
+        try {
+          print('Fetching review statistics for snack ID: $snackId');
+          final response = await _reviewStatService.getReviewStatistics(snackId)
+              .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              throw TimeoutException('Review stats request timed out');
+            },
+          );
+
+          print('Raw review statistics response for snack $snackId: $response');
+
+          if (!mounted) return;
+
+          // Handle different response formats
+          if (response is Map<String, dynamic>) {
+            setState(() {
+              _reviewStats[snackId] = ReviewStatistic.fromJson(response);
+            });
+            print('Processed review stats for snack ${snackId} from Map: ${_reviewStats[snackId]?.reviewCount}, ${_reviewStats[snackId]?.averageRating}');
+          } else if (response is List && response.isNotEmpty) {
+            setState(() {
+              _reviewStats[snackId] = ReviewStatistic.fromJson(response[0]);
+            });
+            print('Processed review stats for snack ${snackId} from List: ${_reviewStats[snackId]?.reviewCount}, ${_reviewStats[snackId]?.averageRating}');
+          } else {
+            print('Unexpected response format for snack ${snackId}: $response');
+            // Create default stats if response format is unexpected
+            setState(() {
+              _reviewStats[snackId] = ReviewStatistic(reviewCount: 0, averageRating: 0.0);
+            });
+          }
+        } catch (e) {
+          print('Error fetching review stats for snack ${snackId}: $e');
+          // Continue with other snacks even if one fails
+        }
+      }
+    } catch (e) {
+      print('Error in review statistics batch processing: $e');
+    }
   }
 
   void _showToast(String message) {
@@ -71,7 +241,11 @@ class _MyReviewPageState extends State<MyReviewPage> {
     });
   }
 
-  void _editReview(ReviewItem item) {
+  void _editReview(Review review, Snack snack) {
+    // Create a TextEditingController with the current review text
+    final reviewController = TextEditingController(text: review.content);
+    double newRating = review.rating.toDouble();
+
     // Show edit review dialog
     showDialog(
       context: context,
@@ -80,7 +254,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
           borderRadius: BorderRadius.circular(15),
         ),
         title: Text(
-          'Edit Review for ${item.name}',
+          'Edit Review for ${snack.name}',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
             color: const Color(0xFF70AE6E),
@@ -90,19 +264,25 @@ class _MyReviewPageState extends State<MyReviewPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Rating stars
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(5, (index) {
-                return IconButton(
-                  icon: Icon(
-                    index < item.rating.floor() ? Icons.star : Icons.star_border,
-                    color: const Color(0xFFFFD700),
-                  ),
-                  onPressed: () {
-                    // Update rating logic would go here
-                  },
-                );
-              }),
+            StatefulBuilder(
+                builder: (context, setDialogState) {
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (index) {
+                      return IconButton(
+                        icon: Icon(
+                          index < newRating ? Icons.star : Icons.star_border,
+                          color: const Color(0xFFFFD700),
+                        ),
+                        onPressed: () {
+                          setDialogState(() {
+                            newRating = index + 1;
+                          });
+                        },
+                      );
+                    }),
+                  );
+                }
             ),
             const SizedBox(height: 15),
             // Review text field
@@ -119,7 +299,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                   borderSide: const BorderSide(color: Color(0xFF70AE6E)),
                 ),
               ),
-              controller: TextEditingController(text: item.reviewText),
+              controller: reviewController,
             ),
           ],
         ),
@@ -139,10 +319,40 @@ class _MyReviewPageState extends State<MyReviewPage> {
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            onPressed: () {
-              // Save review logic would go here
-              Navigator.pop(context);
-              _showToast('Review updated!');
+            onPressed: () async {
+              // Save updated review
+              try {
+                final updatedReview = Review(
+                  id: review.id,
+                  userId: review.userId,
+                  snackId: review.snackId,
+                  rating: newRating.toDouble(),
+                  content: reviewController.text,
+                );
+                final prefs = await SharedPreferences.getInstance();
+                final token = prefs.getString('jwt_token') ?? '';
+                await _reviewService.updateReview(updatedReview, token);
+
+                if (mounted) {
+                  // Update local state
+                  setState(() {
+                    final index = _reviews.indexWhere((r) => r.id == review.id);
+                    if (index != -1) {
+                      _reviews[index] = updatedReview;
+                    }
+                  });
+
+                  Navigator.pop(context);
+                  _showToast('Review updated!');
+
+                  // Refresh review statistics
+                  _fetchReviewStatistics();
+                }
+              } catch (e) {
+                Navigator.pop(context);
+                _showToast('Failed to update review: ${e.toString()}');
+                print('Error updating review: $e');
+              }
             },
             child: Text(
               'Simpan',
@@ -154,7 +364,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
     );
   }
 
-  void _deleteReview(ReviewItem item) {
+  void _deleteReview(Review review, Snack snack) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -170,7 +380,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
             ),
           ),
           content: Text(
-            'Apakah anda yakin ingin menghapus review untuk ${item.name}?',
+            'Apakah anda yakin ingin menghapus review untuk ${snack.name}?',
             style: GoogleFonts.poppins(),
           ),
           actions: [
@@ -189,12 +399,28 @@ class _MyReviewPageState extends State<MyReviewPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              onPressed: () {
-                setState(() {
-                  _reviewItems.remove(item);
-                });
-                Navigator.pop(context);
-                _showToast('Review berhasil dihapus');
+              onPressed: () async {
+                try {
+                  final prefs = await SharedPreferences.getInstance();
+                  final token = prefs.getString('jwt_token') ?? '';
+                  await _reviewService.deleteReview(review.id, token);
+
+                  if (mounted) {
+                    setState(() {
+                      _reviews.removeWhere((r) => r.id == review.id);
+                    });
+
+                    Navigator.pop(context);
+                    _showToast('Review berhasil dihapus');
+
+                    // Refresh review statistics
+                    _fetchReviewStatistics();
+                  }
+                } catch (e) {
+                  Navigator.pop(context);
+                  _showToast('Failed to delete review: ${e.toString()}');
+                  print('Error deleting review: $e');
+                }
               },
               child: Text(
                 'Ya, Hapus!',
@@ -209,6 +435,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
 
   void _addNewReview() {
     _showToast('Tambah Review Baru');
+    // Navigate to snack list or implement new review functionality
   }
 
   @override
@@ -246,6 +473,13 @@ class _MyReviewPageState extends State<MyReviewPage> {
                         Image.asset(
                           'images/logo.png',
                           height: 32,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Icon(
+                              Icons.fastfood_rounded,
+                              size: 32,
+                              color: Colors.green.shade700,
+                            );
+                          },
                         ),
                         const SizedBox(width: 12),
                         Text(
@@ -262,7 +496,6 @@ class _MyReviewPageState extends State<MyReviewPage> {
                         ),
                       ],
                     ),
-                    // Removed the Add button from here
                   ],
                 ),
               ),
@@ -290,28 +523,31 @@ class _MyReviewPageState extends State<MyReviewPage> {
               Expanded(
                 child: _isLoading
                     ? _buildLoadingGrid(size)
-                    : _reviewItems.isEmpty
+                    : _hasError
+                    ? _buildErrorState(size)
+                    : _reviews.isEmpty
                     ? _buildEmptyState(size)
                     : RefreshIndicator(
                   color: const Color(0xFF70AE6E),
-                  onRefresh: () async {
-                    setState(() {
-                      _isLoading = true;
-                    });
-                    await Future.delayed(const Duration(seconds: 1));
-                    setState(() {
-                      _isLoading = false;
-                    });
-                  },
+                  onRefresh: _fetchUserReviews,
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: size.width * 0.04),
                     child: MasonryGridView.count(
                       crossAxisCount: 2,
                       mainAxisSpacing: 15,
                       crossAxisSpacing: 15,
-                      itemCount: _reviewItems.length,
+                      itemCount: _reviews.length,
                       itemBuilder: (context, index) {
-                        return _buildReviewItem(index, size)
+                        final review = _reviews[index];
+                        final snack = _snacks[review.snackId];
+                        final stats = _reviewStats[review.snackId];
+
+                        if (snack == null) {
+                          // If snack details are not loaded yet, show a loading item
+                          return _buildLoadingItem(size, index);
+                        }
+
+                        return _buildReviewItem(review, snack, stats, size, index)
                             .animate()
                             .fadeIn(
                           delay: Duration(milliseconds: 50 * index),
@@ -332,8 +568,73 @@ class _MyReviewPageState extends State<MyReviewPage> {
           ),
         ),
       ),
-      // Removed the floating action button from here
       bottomNavigationBar: const NavBar(),
+    );
+  }
+
+  Widget _buildErrorState(Size size) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.red[400],
+          ).animate().scale(
+            duration: 600.ms,
+            curve: Curves.elasticOut,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Oops! Something went wrong',
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF4A4A4A),
+            ),
+          ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              _errorMessage,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+          ).animate().fadeIn(delay: 400.ms, duration: 400.ms),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: _fetchUserReviews,
+            icon: const Icon(Icons.refresh),
+            label: Text(
+              'Try Again',
+              style: GoogleFonts.poppins(fontSize: 16),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF70AE6E),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 16,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 4,
+              shadowColor: const Color(0xFF70AE6E).withOpacity(0.4),
+            ),
+          ).animate().fadeIn(delay: 600.ms, duration: 400.ms).slideY(
+            begin: 0.2,
+            end: 0,
+            delay: 600.ms,
+            curve: Curves.easeOutQuad,
+          ),
+        ],
+      ),
     );
   }
 
@@ -429,6 +730,10 @@ class _MyReviewPageState extends State<MyReviewPage> {
     );
   }
 
+  Widget _buildLoadingItem(Size size, int i) {
+    return _buildShimmerItem(size, i);
+  }
+
   Widget _buildShimmerItem(Size size, int i) {
     // Vary the height for visual interest
     final heightFactor = 1.2 + (i % 3) * 0.1;
@@ -491,13 +796,14 @@ class _MyReviewPageState extends State<MyReviewPage> {
     );
   }
 
-  Widget _buildReviewItem(int index, Size size) {
-    final item = _reviewItems[index];
+  Widget _buildReviewItem(Review review, Snack snack, ReviewStatistic? stats, Size size, int index) {
     // Vary the height for visual interest
     final heightFactor = 1.2 + (index % 3) * 0.1;
+    final averageRating = stats?.averageRating ?? 0.0;
+    final reviewCount = stats?.reviewCount ?? 0;
 
     return GestureDetector(
-      onTap: () => _editReview(item),
+      onTap: () => _editReview(review, snack),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -520,9 +826,11 @@ class _MyReviewPageState extends State<MyReviewPage> {
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   child: Hero(
-                    tag: 'review-${item.name}',
+                    tag: 'review-${snack.id}',
                     child: CachedNetworkImage(
-                      imageUrl: item.imageUrl,
+                      imageUrl: snack.imageUrl.isNotEmpty
+                          ? AppConfig.baseUrl + snack.imageUrl
+                          : 'https://via.placeholder.com/400x300?text=No+Image',
                       placeholder: (context, url) => Container(
                         height: size.width * 0.5 * heightFactor,
                         color: Colors.grey[200],
@@ -570,7 +878,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          item.rating.toString(),
+                          averageRating.toString(),
                           style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 12,
@@ -592,7 +900,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                 children: [
                   // Name
                   Text(
-                    item.name,
+                    snack.name,
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -604,7 +912,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
 
                   // Review count
                   Text(
-                    '${item.reviewCount} reviews',
+                    '$reviewCount reviews',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       color: Colors.grey[600],
@@ -612,10 +920,10 @@ class _MyReviewPageState extends State<MyReviewPage> {
                   ),
 
                   // Review text preview
-                  if (item.reviewText.isNotEmpty) ...[
+                  if (review.content.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text(
-                      item.reviewText,
+                      review.content,
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         color: Colors.grey[800],
@@ -636,7 +944,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                           'Edit',
                           Icons.edit_outlined,
                           const Color(0xFF70AE6E),
-                              () => _editReview(item),
+                              () => _editReview(review, snack),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -645,7 +953,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                           'Hapus',
                           Icons.delete_outline,
                           Colors.red,
-                              () => _deleteReview(item),
+                              () => _deleteReview(review, snack),
                         ),
                       ),
                     ],
@@ -697,66 +1005,3 @@ class _MyReviewPageState extends State<MyReviewPage> {
     );
   }
 }
-
-// Model class for review items
-class ReviewItem {
-  final String name;
-  final String imageUrl;
-  final double rating;
-  final int reviewCount;
-  final String reviewText;
-
-  ReviewItem({
-    required this.name,
-    required this.imageUrl,
-    required this.rating,
-    required this.reviewCount,
-    this.reviewText = '',
-  });
-}
-
-// Sample data with actual image URLs
-final List<ReviewItem> reviewItems = [
-  ReviewItem(
-    name: 'Corn dog',
-    imageUrl: 'https://images.unsplash.com/photo-1619881590738-a111d176d906?q=80&w=400',
-    rating: 4.8,
-    reviewCount: 30,
-    reviewText: 'Crispy outside, juicy inside. Perfect snack!',
-  ),
-  ReviewItem(
-    name: 'Mochi Daifuku',
-    imageUrl: 'https://images.unsplash.com/photo-1631206753348-db44968fd440?q=80&w=400',
-    rating: 4.9,
-    reviewCount: 25,
-    reviewText: 'Soft and chewy with delicious filling.',
-  ),
-  ReviewItem(
-    name: 'Boba',
-    imageUrl: 'https://images.unsplash.com/photo-1558857563-b371033873b8?q=80&w=400',
-    rating: 4.6,
-    reviewCount: 20,
-    reviewText: 'Perfect sweetness and chewy pearls!',
-  ),
-  ReviewItem(
-    name: 'Toppokki',
-    imageUrl: 'https://images.unsplash.com/photo-1635363638580-c2809d049eee?q=80&w=400',
-    rating: 4.7,
-    reviewCount: 32,
-    reviewText: 'Spicy and satisfying. Great sauce!',
-  ),
-  ReviewItem(
-    name: 'Ice Jeruk',
-    imageUrl: 'https://images.unsplash.com/photo-1560526860-1f0e56046c85?q=80&w=400',
-    rating: 4.5,
-    reviewCount: 18,
-    reviewText: 'Refreshing citrus flavor, perfect for hot days.',
-  ),
-  ReviewItem(
-    name: 'Mango Rice',
-    imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400',
-    rating: 4.8,
-    reviewCount: 25,
-    reviewText: 'Sweet mango pairs perfectly with the rice.',
-  ),
-];

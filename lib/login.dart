@@ -516,6 +516,17 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   Future<void> _saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('jwt_token', token);
+
+    // Parse JWT token to get user ID
+    final parts = token.split('.');
+    if (parts.length == 3) {
+      final payload = parts[1].padRight(4 * ((parts[1].length + 3) ~/ 4), '=');
+      final normalized = base64Url.normalize(payload);
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      final payloadMap = json.decode(decoded);
+      await prefs.setInt('user_id', payloadMap['id']);
+      await prefs.setString('username', payloadMap['sub']);
+    }
   }
 
   void _showErrorSnackBar(String message) {

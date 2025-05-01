@@ -13,7 +13,7 @@ import 'editJajanan.dart';
 import 'models/snack.dart';
 import 'models/reviewStatistic.dart';
 import 'services/api_snack.dart';
-import 'services/api_reviewStatistic.dart';
+import 'services/api_review.dart';
 import 'config.dart';
 
 class JajananKu extends StatefulWidget {
@@ -32,7 +32,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
 
   // API services
   final ApiService _apiService = ApiService();
-  final ApiReviewStatistic _reviewStatService = ApiReviewStatistic();
+  final ApiReview _reviewStatService = ApiReview();
 
   OverlayEntry? _overlayEntry;
   late AnimationController _buttonAnimationController;

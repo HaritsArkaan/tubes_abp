@@ -23,6 +23,25 @@ class ApiService {
     }
   }
 
+  Future<Snack> getSnackById(int snackId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/api/snacks/get/$snackId'),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> jsonData = json.decode(response.body);
+        final snack = Snack.fromJson(jsonData);
+        return snack;
+      } else {
+        throw Exception('Failed to load snack: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching snack by ID: $e');
+      throw Exception('Failed to load snack by ID: $e');
+    }
+  }
+
   Future<List<Snack>> getSnacksByUserId(int userId, String token) async {
     try {
       final response = await http.get(

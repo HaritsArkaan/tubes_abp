@@ -185,33 +185,21 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   void _fetchUserName() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
-    print('Token: $token');
+    final username = prefs.getString('username');
+    final userId = prefs.getInt('user_id');
+
     if (token != null) {
       try {
-        // Simpan token (opsional jika sudah tersimpan sebelumnya)
-        await prefs.setString('jwt_token', token);
-
-        // Pecah token menjadi 3 bagian
-        final parts = token.split('.');
-        if (parts.length != 3) {
-          throw Exception('Token tidak valid');
-        }
-
-        // Decode payload
-        final payload = base64Url.normalize(
-            parts[1]); // normalisasi sebelum decode
-        final decoded = utf8.decode(base64Url.decode(payload));
-
-        // Parse JSON dari payload
-        final payloadMap = json.decode(decoded);
-        final userName = payloadMap['sub']; // ambil 'sub' dari payload
+        // Debugging: Print the token and userId
+        print('Token: $token');
+        print('Username (from sub): $username');
+        print('User ID (from id): $userId');
 
         // Update UI
         setState(() {
-          _userName = userName ?? 'Guest';
+          _userName = username ?? 'Guest';
         });
 
-        print('Username (from sub): $_userName');
       } catch (e) {
         print('Gagal mem-parse token: $e');
         setState(() {
