@@ -27,6 +27,24 @@ class ApiReview {
     }
   }
 
+  Future<List<Review>> getReviewsBySnackId(int snackId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/reviews/snack/$snackId'),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonList = json.decode(response.body);
+        return jsonList.map((json) => Review.fromJson(json)).toList();
+      } else {
+        throw Exception('Failed to load reviews: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error fetching reviews: $e');
+      throw Exception('Failed to load reviews: $e');
+    }
+  }
+
   Future<dynamic> getReviewStatistics(int snackId) async {
     try {
       final response = await http.get(

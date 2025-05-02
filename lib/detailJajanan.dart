@@ -6,6 +6,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:lottie/lottie.dart';
 import 'package:glassmorphism/glassmorphism.dart';
+import 'package:snack_hunt/config.dart';
+import 'models/snack.dart';
 import 'navbar.dart'; // Import the existing NavBar
 
 // Add this class to handle the review functionality
@@ -379,7 +381,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
     // Get the height of the bottom navigation bar
     // This is an estimate - adjust if your NavBar has a different height
     final navBarHeight = 80.0;
-
+    final snack = ModalRoute.of(context)!.settings.arguments as Snack;
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
@@ -438,9 +440,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                   ),
                 ),
               ),
-              title: _showTitle ? const Text(
-                'Risoles Momo',
-                style: TextStyle(
+              title: _showTitle ? Text(
+                snack.name,
+                style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                   shadows: [
@@ -530,7 +532,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
         children: [
           // Background Image with Gradient Overlay
           Hero(
-            tag: 'food-image',
+            tag: 'food-image-${snack.id}',
             child: SizedBox(
               height: MediaQuery.of(context).size.height * 0.45,
               width: double.infinity,
@@ -538,7 +540,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                 children: [
                   // Image
                   CachedNetworkImage(
-                    imageUrl: 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1000&q=80',
+                    imageUrl: '${AppConfig.baseUrl}${snack.imageUrl}',
                     fit: BoxFit.cover,
                     height: double.infinity,
                     width: double.infinity,
