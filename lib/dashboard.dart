@@ -1,12 +1,15 @@
+import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:snack_hunt/services/auth_service.dart' show AuthService;
 import 'config.dart';
 import 'navbar.dart';
 import 'models/snack.dart';
 import 'services/api_snack.dart';
+import 'services/api_review.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({Key? key}) : super(key: key);
@@ -43,6 +46,11 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
 
   // Search controller
   final TextEditingController _searchController = TextEditingController();
+
+  // Review statistics
+  final ApiReview _apiReview = ApiReview();
+  Map<int, double> _reviewRatings = {};
+  bool _isLoadingReviewStats = false;
 
   @override
   void initState() {
@@ -82,6 +90,64 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     });
   }
 
+  // Fetch review statistics for snacks
+  Future<void> _fetchReviewStatistics() async {
+    if (_snacks.isEmpty) return;
+
+    setState(() {
+      _isLoadingReviewStats = true;
+    });
+
+    try {
+      // Create a temporary map to store the results
+      Map<int, double> tempRatings = {};
+
+      // Fetch review statistics for each snack
+      for (var snack in _snacks) {
+        try {
+          final stats = await _apiReview.getReviewStatistics(snack.id);
+
+          // Handle different response formats
+          double averageRating = 0.0;
+          if (stats is Map<String, dynamic>) {
+            averageRating = (stats['averageRating'] ?? 0.0).toDouble();
+          } else if (stats is List && stats.isNotEmpty && stats[0] is Map<String, dynamic>) {
+            averageRating = (stats[0]['averageRating'] ?? 0.0).toDouble();
+          }
+
+          // Store the average rating
+          tempRatings[snack.id] = averageRating;
+
+          // Update UI if mounted
+          if (mounted) {
+            setState(() {
+              _reviewRatings = Map.from(tempRatings);
+            });
+          }
+        } catch (e) {
+          print('Error fetching review statistics for snack ${snack.id}: $e');
+          // Use the snack's rating as fallback
+          tempRatings[snack.id] = snack.rating;
+        }
+      }
+
+      // Final update with all ratings
+      if (mounted) {
+        setState(() {
+          _reviewRatings = tempRatings;
+          _isLoadingReviewStats = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching review statistics: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingReviewStats = false;
+        });
+      }
+    }
+  }
+
   // Fetch snacks from API
   Future<void> _fetchSnacks() async {
     setState(() {
@@ -105,6 +171,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
 
       // Start carousel timer after data is loaded
       _startCarouselTimer();
+
+      // Fetch review statistics
+      _fetchReviewStatistics();
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to load snacks. Please check your connection.';
@@ -183,21 +252,33 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   void _fetchUserName() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token');
-    final username = prefs.getString('username');
-    final userId = prefs.getInt('user_id');
-
+    print('Token: $token');
     if (token != null) {
       try {
-        // Debugging: Print the token and userId
-        print('Token: $token');
-        print('Username (from sub): $username');
-        print('User ID (from id): $userId');
+        // Simpan token (opsional jika sudah tersimpan sebelumnya)
+        await prefs.setString('jwt_token', token);
+
+        // Pecah token menjadi 3 bagian
+        final parts = token.split('.');
+        if (parts.length != 3) {
+          throw Exception('Token tidak valid');
+        }
+
+        // Decode payload
+        final payload = base64Url.normalize(
+            parts[1]); // normalisasi sebelum decode
+        final decoded = utf8.decode(base64Url.decode(payload));
+
+        // Parse JSON dari payload
+        final payloadMap = json.decode(decoded);
+        final userName = payloadMap['sub']; // ambil 'sub' dari payload
 
         // Update UI
         setState(() {
-          _userName = username ?? 'Guest';
+          _userName = userName ?? 'Guest';
         });
 
+        print('Username (from sub): $_userName');
       } catch (e) {
         print('Gagal mem-parse token: $e');
         setState(() {
@@ -1426,7 +1507,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                             ),
                                             const SizedBox(width: 4),
                                             Text(
-                                              snack.rating.toStringAsFixed(1),
+                                              (_reviewRatings[snack.id] ?? snack.rating).toStringAsFixed(1),
                                               style: TextStyle(
                                                 color: Colors.white,
                                                 fontSize: size.width * 0.03,
@@ -1987,7 +2068,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        snack.rating.toStringAsFixed(1),
+                                        (_reviewRatings[snack.id] ?? snack.rating).toStringAsFixed(1),
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 10,
@@ -2331,7 +2412,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      snack.rating.toStringAsFixed(1),
+                                      (_reviewRatings[snack.id] ?? snack.rating).toStringAsFixed(1),
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 10,
@@ -2369,7 +2450,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                   color: Colors.green.shade700,
                                 ),
                               ),
-                              // Removed the View Details button that was causing overflow
                             ],
                           ),
                         ),
@@ -2580,7 +2660,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      snack.rating.toStringAsFixed(1),
+                                      (_reviewRatings[snack.id] ?? snack.rating).toStringAsFixed(1),
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 10,
@@ -2901,7 +2981,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                     ),
                                     const SizedBox(width: 4),
                                     Text(
-                                      snack.rating.toStringAsFixed(1),
+                                      (_reviewRatings[snack.id] ?? snack.rating).toStringAsFixed(1),
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 10,

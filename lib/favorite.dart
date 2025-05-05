@@ -5,7 +5,18 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:like_button/like_button.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
+import 'dart:convert';
 import 'navbar.dart';
+import 'detailJajanan.dart';
+import 'models/favorite.dart';
+import 'models/snack.dart';
+import 'models/reviewStatistic.dart';
+import 'services/api_favorite.dart';
+import 'services/api_snack.dart';
+import 'services/api_review.dart';
+import 'config.dart';
 
 class FavoritePage extends StatefulWidget {
   const FavoritePage({Key? key}) : super(key: key);
@@ -16,27 +27,224 @@ class FavoritePage extends StatefulWidget {
 
 class _FavoritePageState extends State<FavoritePage> {
   bool _isLoading = true;
-  final List<FoodItem> _foodItems = foodItems;
+  bool _isError = false;
+  String _errorMessage = '';
+
+  // User data
+  int _userId = 0;
+  String _token = '';
+
+  // API services
+  final ApiFavorite _apiFavorite = ApiFavorite();
+  final ApiService _apiSnack = ApiService();
+  final ApiReview _apiReview = ApiReview();
+
+  // Data storage
+  List<Favorite> _favorites = [];
+  Map<int, Snack> _snacks = {};
+  Map<int, ReviewStatistic> _reviewStats = {};
 
   @override
   void initState() {
     super.initState();
-    // Simulate loading delay
-    Future.delayed(const Duration(milliseconds: 1200), () {
+    _loadUserData();
+  }
+
+  // Load user data from SharedPreferences
+  Future<void> _loadUserData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userData = prefs.getString('username');
+
+      if (userData != null) {
+        final userId = prefs.getInt('user_id');
+        final token = prefs.getString('jwt_token') ?? '';
+
+        if (mounted) {
+          setState(() {
+            _userId = userId!;
+            _token = token;
+          });
+
+          await _loadFavorites();
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isError = true;
+            _errorMessage = 'User not logged in';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isError = true;
+          _errorMessage = 'Failed to load user data: $e';
+        });
+      }
+      print('Error loading user data: $e');
+    }
+  }
+
+  // Load favorites and related data
+  Future<void> _loadFavorites() async {
+    try {
+      if (_userId == 0 || _token.isEmpty) {
+        throw Exception('User ID or token is missing');
+      }
+
+      setState(() {
+        _isLoading = true;
+        _isError = false;
+      });
+
+      // Fetch favorites
+      final favorites = await _apiFavorite.getFavoritesByUserId(_userId, _token);
+
+      if (mounted) {
+        setState(() {
+          _favorites = favorites;
+        });
+
+        // Fetch snack details for each favorite
+        await _fetchSnackDetails();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isError = true;
+          _errorMessage = 'Failed to load favorites: $e';
+        });
+      }
+      print('Error loading favorites: $e');
+    }
+  }
+
+  // Fetch snack details for all favorites
+  Future<void> _fetchSnackDetails() async {
+    try {
+      final futures = <Future>[];
+
+      for (final favorite in _favorites) {
+        futures.add(_fetchSnackDetail(favorite.snackId));
+      }
+
+      await Future.wait(futures);
+
+      // After all snacks are fetched, fetch review statistics
+      await _fetchReviewStatistics();
+
       if (mounted) {
         setState(() {
           _isLoading = false;
         });
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isError = true;
+          _errorMessage = 'Failed to load snack details: $e';
+        });
+      }
+      print('Error fetching snack details: $e');
+    }
   }
 
-  void _toggleFavorite(int index) {
-    setState(() {
-      _foodItems[index] = _foodItems[index].copyWith(
-        isFavorite: !_foodItems[index].isFavorite,
+  // Fetch a single snack detail
+  Future<void> _fetchSnackDetail(int snackId) async {
+    try {
+      final snack = await _apiSnack.getSnackById(snackId);
+
+      if (mounted) {
+        setState(() {
+          _snacks[snackId] = snack;
+        });
+      }
+    } catch (e) {
+      print('Error fetching snack $snackId: $e');
+    }
+  }
+
+  // Fetch review statistics for all snacks
+  Future<void> _fetchReviewStatistics() async {
+    try {
+      if (_snacks.isEmpty) {
+        print('No snacks to fetch review statistics for');
+        return;
+      }
+
+      print('Fetching review statistics for ${_snacks.length} snacks');
+
+      final futures = <Future>[];
+
+      for (final snackId in _snacks.keys) {
+        futures.add(_fetchReviewStatistic(snackId));
+      }
+
+      await Future.wait(futures);
+    } catch (e) {
+      print('Error fetching review statistics: $e');
+    }
+  }
+
+  // Fetch review statistics for a single snack
+  Future<void> _fetchReviewStatistic(int snackId) async {
+    try {
+      final response = await _apiReview.getReviewStatistics(snackId);
+
+      ReviewStatistic? stats;
+      if (response is Map<String, dynamic>) {
+        stats = ReviewStatistic.fromJson(response);
+      } else if (response is List && response.isNotEmpty) {
+        stats = ReviewStatistic.fromJson(response[0]);
+      }
+
+      if (stats != null && mounted) {
+        setState(() {
+          _reviewStats[snackId] = stats!;
+        });
+      }
+    } catch (e) {
+      print('Error fetching review statistics for snack $snackId: $e');
+    }
+  }
+
+  // Toggle favorite status
+  Future<void> _toggleFavorite(int snackId) async {
+    try {
+      // Here you would call the API to toggle the favorite status
+      // For now, we'll just remove it from the local list
+      setState(() {
+        _favorites.removeWhere((favorite) => favorite.snackId == snackId);
+        _snacks.remove(snackId);
+        _reviewStats.remove(snackId);
+      });
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Removed from favorites'),
+          backgroundColor: Color(0xFF4CAF50),
+          duration: Duration(seconds: 2),
+        ),
       );
-    });
+    } catch (e) {
+      print('Error toggling favorite: $e');
+
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update favorite: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
@@ -106,55 +314,25 @@ class _FavoritePageState extends State<FavoritePage> {
                 ),
               ),
 
-              // Food grid
+              // Content
               Expanded(
                 child: _isLoading
                     ? _buildLoadingGrid(size)
-                    : RefreshIndicator(
-                  color: const Color(0xFF4CAF50),
-                  onRefresh: () async {
-                    setState(() {
-                      _isLoading = true;
-                    });
-                    await Future.delayed(const Duration(seconds: 1));
-                    setState(() {
-                      _isLoading = false;
-                    });
-                  },
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: size.width * 0.04),
-                    child: MasonryGridView.count(
-                      crossAxisCount: 3,
-                      mainAxisSpacing: 15,
-                      crossAxisSpacing: 12,
-                      itemCount: _foodItems.length,
-                      itemBuilder: (context, index) {
-                        return _buildFoodItem(index, size)
-                            .animate()
-                            .fadeIn(
-                          delay: Duration(milliseconds: 50 * index),
-                          duration: 400.ms,
-                        )
-                            .slideY(
-                          begin: 0.1,
-                          end: 0,
-                          delay: Duration(milliseconds: 50 * index),
-                          curve: Curves.easeOutQuad,
-                        );
-                      },
-                    ),
-                  ),
-                ),
+                    : _isError
+                    ? _buildErrorView()
+                    : _favorites.isEmpty
+                    ? _buildEmptyView()
+                    : _buildFavoritesGrid(size),
               ),
             ],
           ),
         ),
       ),
-      // Fix: Check what parameters your NavBar accepts and use those instead
-      bottomNavigationBar: const NavBar(), // Changed from currentIndex to selectedIndex
+      bottomNavigationBar: const NavBar(),
     );
   }
 
+  // Build loading grid with shimmer effect
   Widget _buildLoadingGrid(Size size) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: size.width * 0.04),
@@ -163,14 +341,15 @@ class _FavoritePageState extends State<FavoritePage> {
         mainAxisSpacing: 15,
         crossAxisSpacing: 12,
         itemCount: 9,
-        itemBuilder: (context, i) { // Changed from index to i to avoid conflict
-          return _buildShimmerItem(size, i); // Pass i to the method
+        itemBuilder: (context, i) {
+          return _buildShimmerItem(size, i);
         },
       ),
     );
   }
 
-  Widget _buildShimmerItem(Size size, int i) { // Added parameter i
+  // Build shimmer loading item
+  Widget _buildShimmerItem(Size size, int i) {
     return Shimmer.fromColors(
       baseColor: Colors.grey[300]!,
       highlightColor: Colors.grey[100]!,
@@ -178,7 +357,7 @@ class _FavoritePageState extends State<FavoritePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            height: size.width * (0.25 + (i % 3) * 0.05), // Use i instead of index
+            height: size.width * (0.25 + (i % 3) * 0.05),
             width: size.width * 0.3,
             decoration: BoxDecoration(
               color: Colors.white,
@@ -208,20 +387,150 @@ class _FavoritePageState extends State<FavoritePage> {
     );
   }
 
-  Widget _buildFoodItem(int index, Size size) {
-    final item = _foodItems[index];
+  // Build error view
+  Widget _buildErrorView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: Colors.red,
+            size: 60,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Oops! Something went wrong',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _errorMessage,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: _loadFavorites,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Try Again'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Build empty view
+  Widget _buildEmptyView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.favorite_border,
+            color: Color(0xFF4CAF50),
+            size: 60,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No Favorites Yet',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Start adding your favorite snacks!',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4CAF50),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Explore Snacks'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Build favorites grid
+  Widget _buildFavoritesGrid(Size size) {
+    return RefreshIndicator(
+      color: const Color(0xFF4CAF50),
+      onRefresh: _loadFavorites,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: size.width * 0.04),
+        child: MasonryGridView.count(
+          crossAxisCount: 3,
+          mainAxisSpacing: 15,
+          crossAxisSpacing: 12,
+          itemCount: _favorites.length,
+          itemBuilder: (context, index) {
+            final favorite = _favorites[index];
+            final snack = _snacks[favorite.snackId];
+            final stats = _reviewStats[favorite.snackId];
+
+            if (snack == null) {
+              return const SizedBox.shrink();
+            }
+
+            return _buildFavoriteItem(snack, stats, size, index)
+                .animate()
+                .fadeIn(
+              delay: Duration(milliseconds: 50 * index),
+              duration: 400.ms,
+            )
+                .slideY(
+              begin: 0.1,
+              end: 0,
+              delay: Duration(milliseconds: 50 * index),
+              curve: Curves.easeOutQuad,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // Build favorite item
+  Widget _buildFavoriteItem(Snack snack, ReviewStatistic? stats, Size size, int index) {
     // Vary the height slightly for visual interest
     final heightFactor = 0.25 + (index % 3) * 0.05;
+    final rating = stats?.averageRating ?? 0.0;
+    final reviewCount = stats?.reviewCount ?? 0;
 
     return GestureDetector(
       onTap: () {
         // Navigate to detail page
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${item.name} details'),
-            duration: const Duration(seconds: 1),
-            backgroundColor: const Color(0xFF4CAF50),
-          ),
+        Navigator.pushNamed(
+          context,
+          '/detailJajanan',
+          arguments: snack,
         );
       },
       child: Column(
@@ -232,7 +541,7 @@ class _FavoritePageState extends State<FavoritePage> {
             children: [
               // Food image
               Hero(
-                tag: 'food_${item.name}',
+                tag: 'food_${snack.id}',
                 child: Container(
                   height: size.width * heightFactor,
                   width: size.width * 0.3,
@@ -250,7 +559,7 @@ class _FavoritePageState extends State<FavoritePage> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: CachedNetworkImage(
-                      imageUrl: item.imageUrl,
+                      imageUrl: '${AppConfig.baseUrl}${snack.imageUrl}',
                       placeholder: (context, url) => Container(
                         color: Colors.grey[200],
                         child: const Center(
@@ -275,7 +584,7 @@ class _FavoritePageState extends State<FavoritePage> {
                 bottom: 5,
                 child: LikeButton(
                   size: size.width * 0.06,
-                  isLiked: item.isFavorite,
+                  isLiked: true, // Always true since this is the favorites page
                   circleColor: const CircleColor(
                     start: Color(0xFF4CAF50),
                     end: Color(0xFF66BB6A),
@@ -292,8 +601,8 @@ class _FavoritePageState extends State<FavoritePage> {
                     );
                   },
                   onTap: (isLiked) async {
-                    _toggleFavorite(index);
-                    return !isLiked;
+                    await _toggleFavorite(snack.id);
+                    return false; // We handle the state change manually
                   },
                 ),
               ),
@@ -302,7 +611,7 @@ class _FavoritePageState extends State<FavoritePage> {
           const SizedBox(height: 6),
           // Food name
           Text(
-            item.name,
+            snack.name,
             style: GoogleFonts.poppins(
               fontSize: 13,
               fontWeight: FontWeight.w500,
@@ -320,7 +629,7 @@ class _FavoritePageState extends State<FavoritePage> {
               ),
               const SizedBox(width: 2),
               Text(
-                '${item.rating} (${item.reviewCount})',
+                '$rating ($reviewCount)',
                 style: GoogleFonts.poppins(
                   fontSize: 11,
                   color: Colors.grey[600],
@@ -333,94 +642,3 @@ class _FavoritePageState extends State<FavoritePage> {
     );
   }
 }
-
-// Enhanced model class for food items
-class FoodItem {
-  final String name;
-  final String imageUrl;
-  final double rating;
-  final int reviewCount;
-  final bool isFavorite;
-
-  FoodItem({
-    required this.name,
-    required this.imageUrl,
-    required this.rating,
-    required this.reviewCount,
-    this.isFavorite = true,
-  });
-
-  FoodItem copyWith({
-    String? name,
-    String? imageUrl,
-    double? rating,
-    int? reviewCount,
-    bool? isFavorite,
-  }) {
-    return FoodItem(
-      name: name ?? this.name,
-      imageUrl: imageUrl ?? this.imageUrl,
-      rating: rating ?? this.rating,
-      reviewCount: reviewCount ?? this.reviewCount,
-      isFavorite: isFavorite ?? this.isFavorite,
-    );
-  }
-}
-
-// Sample data with actual image URLs
-final List<FoodItem> foodItems = [
-  FoodItem(
-    name: 'Corn dog',
-    imageUrl: 'https://images.unsplash.com/photo-1619881590738-a111d176d906?q=80&w=400',
-    rating: 4.8,
-    reviewCount: 30,
-  ),
-  FoodItem(
-    name: 'Mochi Daifuku',
-    imageUrl: 'https://images.unsplash.com/photo-1631206753348-db44968fd440?q=80&w=400',
-    rating: 4.9,
-    reviewCount: 25,
-  ),
-  FoodItem(
-    name: 'Boba',
-    imageUrl: 'https://images.unsplash.com/photo-1558857563-b371033873b8?q=80&w=400',
-    rating: 4.6,
-    reviewCount: 20,
-  ),
-  FoodItem(
-    name: 'Wonton',
-    imageUrl: 'https://images.unsplash.com/photo-1625398407796-82650a8c9dd4?q=80&w=400',
-    rating: 4.5,
-    reviewCount: 30,
-  ),
-  FoodItem(
-    name: 'Ice Strawberry',
-    imageUrl: 'https://images.unsplash.com/photo-1501443762994-82bd5dace89a?q=80&w=400',
-    rating: 4.9,
-    reviewCount: 25,
-  ),
-  FoodItem(
-    name: 'Curry Katsu',
-    imageUrl: 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?q=80&w=400',
-    rating: 4.8,
-    reviewCount: 25,
-  ),
-  FoodItem(
-    name: 'Nasi Goreng',
-    imageUrl: 'https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?q=80&w=400',
-    rating: 4.7,
-    reviewCount: 35,
-  ),
-  FoodItem(
-    name: 'Cappuccino',
-    imageUrl: 'https://images.unsplash.com/photo-1534778101976-62847782c213?q=80&w=400',
-    rating: 4.8,
-    reviewCount: 40,
-  ),
-  FoodItem(
-    name: 'Gyoza',
-    imageUrl: 'https://images.unsplash.com/photo-1625938145744-e380515399b7?q=80&w=400',
-    rating: 4.7,
-    reviewCount: 25,
-  ),
-];
