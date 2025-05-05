@@ -8,24 +8,10 @@ import 'package:lottie/lottie.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:snack_hunt/config.dart';
 import 'models/snack.dart';
+import 'models/review.dart';
+import 'models/reviewStatistic.dart';
+import 'services/api_review.dart';
 import 'navbar.dart'; // Import the existing NavBar
-
-// Add this class to handle the review functionality
-class ReviewModel {
-  final String userName;
-  final int rating;
-  final String comment;
-  final String? avatarUrl;
-  final DateTime date;
-
-  ReviewModel({
-    required this.userName,
-    required this.rating,
-    required this.comment,
-    this.avatarUrl,
-    DateTime? date,
-  }) : date = date ?? DateTime.now();
-}
 
 class FoodDetailPage extends StatefulWidget {
   const FoodDetailPage({Key? key}) : super(key: key);
@@ -44,33 +30,15 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
   final ScrollController _scrollController = ScrollController();
   bool _showTitle = false;
 
-  // List to store reviews
-  List<ReviewModel> _reviews = [
-    ReviewModel(
-      userName: 'Jay',
-      rating: 5,
-      comment: 'Lorem ipsum dolor sit amet consectetur. Quisque varius suspendisse sed diam imperdiet eget.',
-      date: DateTime.now().subtract(const Duration(days: 2)),
-    ),
-    ReviewModel(
-      userName: 'Jeno',
-      rating: 4,
-      comment: 'Lorem ipsum dolor sit amet consectetur. Quisque varius suspendisse sed diam imperdiet eget.',
-      date: DateTime.now().subtract(const Duration(days: 5)),
-    ),
-    ReviewModel(
-      userName: 'Angga',
-      rating: 3,
-      comment: 'Lorem ipsum dolor sit amet consectetur. Quisque varius suspendisse sed diam imperdiet eget.',
-      date: DateTime.now().subtract(const Duration(days: 7)),
-    ),
-    ReviewModel(
-      userName: 'Jennie',
-      rating: 4,
-      comment: 'Lorem ipsum dolor sit amet consectetur. Quisque varius suspendisse sed diam imperdiet eget.',
-      date: DateTime.now().subtract(const Duration(days: 10)),
-    ),
-  ];
+  // API service
+  final ApiReview _apiReview = ApiReview();
+
+  // State variables
+  List<Review> _reviews = [];
+  ReviewStatistic? _reviewStatistic;
+  bool _isLoadingReviews = true;
+  bool _isLoadingStats = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -115,6 +83,98 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
     _scrollController.addListener(_onScroll);
 
     _animationController.forward();
+
+    // We'll fetch data in didChangeDependencies since we need the route arguments
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Get the snack from route arguments
+    final snack = ModalRoute.of(context)?.settings.arguments as Snack?;
+
+    if (snack != null) {
+      // Fetch review statistics and reviews
+      _fetchReviewStatistics(snack.id);
+      _fetchReviews(snack.id);
+    }
+  }
+
+  // Fetch review statistics
+  Future<void> _fetchReviewStatistics(int snackId) async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingStats = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final dynamic response = await _apiReview.getReviewStatistics(snackId);
+
+      if (response is Map<String, dynamic>) {
+        if (mounted) {
+          setState(() {
+            _reviewStatistic = ReviewStatistic.fromJson(response);
+            _isLoadingStats = false;
+          });
+        }
+      } else if (response is List && response.isNotEmpty && response[0] is Map<String, dynamic>) {
+        if (mounted) {
+          setState(() {
+            _reviewStatistic = ReviewStatistic.fromJson(response[0]);
+            _isLoadingStats = false;
+          });
+        }
+      } else {
+        // Handle unexpected response format
+        if (mounted) {
+          setState(() {
+            _reviewStatistic = ReviewStatistic(reviewCount: 0, averageRating: 0.0);
+            _isLoadingStats = false;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error fetching review statistics: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load review statistics';
+          _isLoadingStats = false;
+          _reviewStatistic = ReviewStatistic(reviewCount: 0, averageRating: 0.0);
+        });
+      }
+    }
+  }
+
+  // Fetch reviews
+  Future<void> _fetchReviews(int snackId) async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoadingReviews = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final reviews = await _apiReview.getReviewsBySnackId(snackId);
+
+      if (mounted) {
+        setState(() {
+          _reviews = reviews;
+          _isLoadingReviews = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching reviews: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load reviews';
+          _isLoadingReviews = false;
+        });
+      }
+    }
   }
 
   void _onScroll() {
@@ -158,12 +218,12 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
               child: Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      const Color(0xFFF1F8E9),
-                      const Color(0xFFDCEDC8),
+                      Color(0xFFF1F8E9),
+                      Color(0xFFDCEDC8),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(24),
@@ -295,25 +355,17 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                         onPressed: () {
                           if (_selectedRating > 0 && _reviewController.text.isNotEmpty) {
                             // Add the review
-                            setState(() {
-                              _reviews.add(
-                                ReviewModel(
-                                  userName: 'You', // You could replace with actual user name
-                                  rating: _selectedRating.round(),
-                                  comment: _reviewController.text,
-                                ),
-                              );
-                            });
+                            // In a real app, you would call an API to save the review
                             Navigator.pop(context);
 
                             // Show success message
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Row(
+                                content: const Row(
                                   children: [
-                                    const Icon(Icons.check_circle, color: Colors.white),
-                                    const SizedBox(width: 12),
-                                    const Text('Review added successfully!'),
+                                    Icon(Icons.check_circle, color: Colors.white),
+                                    SizedBox(width: 12),
+                                    Text('Review added successfully!'),
                                   ],
                                 ),
                                 backgroundColor: const Color(0xFF8BC34A),
@@ -328,11 +380,11 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                             // Show error message
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Row(
+                                content: const Row(
                                   children: [
-                                    const Icon(Icons.error, color: Colors.white),
-                                    const SizedBox(width: 12),
-                                    const Text('Please add a rating and review text'),
+                                    Icon(Icons.error, color: Colors.white),
+                                    SizedBox(width: 12),
+                                    Text('Please add a rating and review text'),
                                   ],
                                 ),
                                 backgroundColor: Colors.red,
@@ -372,7 +424,11 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
       },
     ).then((_) {
       // Refresh the UI after dialog is closed
-      setState(() {});
+      final snack = ModalRoute.of(context)?.settings.arguments as Snack?;
+      if (snack != null) {
+        _fetchReviewStatistics(snack.id);
+        _fetchReviews(snack.id);
+      }
     });
   }
 
@@ -675,10 +731,10 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                           ),
                                         ],
                                       ),
-                                      child: const Center(
+                                      child: Center(
                                         child: Text(
-                                          'RISOLE',
-                                          style: TextStyle(
+                                          snack.name[0].toUpperCase(),
+                                          style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
@@ -694,9 +750,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          const Text(
-                                            'Risoles Momo',
-                                            style: TextStyle(
+                                          Text(
+                                            snack.name,
+                                            style: const TextStyle(
                                               fontSize: 24,
                                               fontWeight: FontWeight.bold,
                                             ),
@@ -785,11 +841,22 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                       ),
                                     ],
                                   ),
-                                  child: Row(
+                                  child: _isLoadingStats
+                                      ? const Center(
+                                    child: SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Color(0xFF8BC34A),
+                                      ),
+                                    ),
+                                  )
+                                      : Row(
                                     children: [
                                       RatingBar.builder(
-                                        initialRating: 5,
-                                        minRating: 1,
+                                        initialRating: _reviewStatistic?.averageRating ?? 0,
+                                        minRating: 0,
                                         direction: Axis.horizontal,
                                         allowHalfRating: true,
                                         itemCount: 5,
@@ -804,7 +871,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                       ),
                                       const SizedBox(width: 10),
                                       Text(
-                                        '5/5',
+                                        '${_reviewStatistic?.averageRating.toStringAsFixed(1) ?? "0.0"}/5',
                                         style: TextStyle(
                                           color: Colors.grey[800],
                                           fontWeight: FontWeight.bold,
@@ -813,7 +880,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        '(22 reviews)',
+                                        '(${_reviewStatistic?.reviewCount ?? 0} reviews)',
                                         style: TextStyle(
                                           color: Colors.grey[600],
                                           fontSize: 14,
@@ -835,7 +902,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                             ),
                                             const SizedBox(width: 4),
                                             Text(
-                                              '98%',
+                                              _reviewStatistic?.averageRating != null && _reviewStatistic!.averageRating > 0
+                                                  ? '${((_reviewStatistic!.averageRating / 5) * 100).toInt()}%'
+                                                  : '0%',
                                               style: TextStyle(
                                                 color: Colors.grey[800],
                                                 fontWeight: FontWeight.bold,
@@ -868,12 +937,12 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                               vertical: 10,
                                             ),
                                             decoration: BoxDecoration(
-                                              gradient: LinearGradient(
+                                              gradient: const LinearGradient(
                                                 begin: Alignment.topLeft,
                                                 end: Alignment.bottomRight,
                                                 colors: [
-                                                  const Color(0xFF8BC34A),
-                                                  const Color(0xFF689F38),
+                                                  Color(0xFF8BC34A),
+                                                  Color(0xFF689F38),
                                                 ],
                                               ),
                                               borderRadius: BorderRadius.circular(20),
@@ -894,9 +963,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                                   color: Colors.white,
                                                 ),
                                                 const SizedBox(width: 6),
-                                                const Text(
-                                                  'Rp 5.000',
-                                                  style: TextStyle(
+                                                Text(
+                                                  'Rp ${snack.price.toStringAsFixed(0)}',
+                                                  style: const TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     color: Colors.white,
                                                     fontSize: 16,
@@ -918,10 +987,6 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                         child: Row(
                                           children: [
                                             _buildTag('Food', Icons.fastfood),
-                                            const SizedBox(width: 8),
-                                            _buildTag('Salty', Icons.restaurant),
-                                            const SizedBox(width: 8),
-                                            _buildTag('Snack', Icons.lunch_dining),
                                           ],
                                         ),
                                       ),
@@ -965,12 +1030,12 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                           Container(
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
-                                              gradient: LinearGradient(
+                                              gradient: const LinearGradient(
                                                 begin: Alignment.topLeft,
                                                 end: Alignment.bottomRight,
                                                 colors: [
-                                                  const Color(0xFF8BC34A),
-                                                  const Color(0xFF689F38),
+                                                  Color(0xFF8BC34A),
+                                                  Color(0xFF689F38),
                                                 ],
                                               ),
                                               shape: BoxShape.circle,
@@ -1003,7 +1068,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                                 ),
                                                 const SizedBox(height: 4),
                                                 Text(
-                                                  'Sukapura Blok 16',
+                                                  snack.location,
                                                   style: TextStyle(
                                                     color: Colors.grey[700],
                                                     fontSize: 14,
@@ -1041,12 +1106,12 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                           Container(
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
-                                              gradient: LinearGradient(
+                                              gradient: const LinearGradient(
                                                 begin: Alignment.topLeft,
                                                 end: Alignment.bottomRight,
                                                 colors: [
-                                                  const Color(0xFF8BC34A),
-                                                  const Color(0xFF689F38),
+                                                  Color(0xFF8BC34A),
+                                                  Color(0xFF689F38),
                                                 ],
                                               ),
                                               shape: BoxShape.circle,
@@ -1079,7 +1144,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                                 ),
                                                 const SizedBox(height: 4),
                                                 Text(
-                                                  '082208120322',
+                                                  snack.contact,
                                                   style: TextStyle(
                                                     color: Colors.grey[700],
                                                     fontSize: 14,
@@ -1120,12 +1185,12 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                         width: double.infinity,
                                         height: 55,
                                         decoration: BoxDecoration(
-                                          gradient: LinearGradient(
+                                          gradient: const LinearGradient(
                                             begin: Alignment.topLeft,
                                             end: Alignment.bottomRight,
                                             colors: [
-                                              const Color(0xFF8BC34A),
-                                              const Color(0xFF689F38),
+                                              Color(0xFF8BC34A),
+                                              Color(0xFF689F38),
                                             ],
                                           ),
                                           borderRadius: BorderRadius.circular(16),
@@ -1145,17 +1210,17 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                             borderRadius: BorderRadius.circular(16),
                                             splashColor: Colors.white.withOpacity(0.1),
                                             highlightColor: Colors.white.withOpacity(0.1),
-                                            child: Center(
+                                            child: const Center(
                                               child: Row(
                                                 mainAxisAlignment: MainAxisAlignment.center,
                                                 children: [
-                                                  const Icon(
+                                                  Icon(
                                                     Icons.rate_review,
                                                     color: Colors.white,
                                                     size: 24,
                                                   ),
-                                                  const SizedBox(width: 12),
-                                                  const Text(
+                                                  SizedBox(width: 12),
+                                                  Text(
                                                     'Write a Review',
                                                     style: TextStyle(
                                                       color: Colors.white,
@@ -1210,7 +1275,59 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                 const SizedBox(height: 16),
 
                                 // Reviews
-                                GridView.count(
+                                _isLoadingReviews
+                                    ? Center(
+                                  child: SizedBox(
+                                    height: 100,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const CircularProgressIndicator(
+                                          color: Color(0xFF8BC34A),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'Loading reviews...',
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                                    : _reviews.isEmpty
+                                    ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(
+                                        Icons.rate_review_outlined,
+                                        color: Color(0xFF8BC34A),
+                                        size: 48,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'No reviews yet',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Be the first to review this snack!',
+                                        style: TextStyle(
+                                          color: Colors.grey[500],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                                    : GridView.count(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
                                   crossAxisCount: 2,
@@ -1218,10 +1335,10 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                   crossAxisSpacing: 16,
                                   mainAxisSpacing: 16,
                                   children: _reviews.map((review) => _buildReviewCard(
-                                    review.userName,
-                                    review.rating,
-                                    review.comment,
-                                    review.date,
+                                    review.userId.toString(), // Using userId as name for now
+                                    review.rating.toInt(),
+                                    review.content,
+                                    DateTime.now(), // Assuming the API doesn't provide a date
                                   )).toList(),
                                 ),
                               ],
@@ -1351,7 +1468,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name,
+                      'User $name',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
