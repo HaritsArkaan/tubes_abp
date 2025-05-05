@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,7 +6,6 @@ import 'package:shimmer/shimmer.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'models/reviewStatistic.dart';
 import 'navbar.dart';
 import 'editJajanan.dart';
 import 'models/snack.dart';
@@ -29,18 +27,13 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
   String _errorMessage = '';
   List<Snack> _snacks = [];
   Map<int, ReviewStatistic> _reviewStats = {};
-
-  // API services
-  final ApiService _apiService = ApiService();
-  final ApiReview _reviewStatService = ApiReview();
-
   OverlayEntry? _overlayEntry;
   late AnimationController _buttonAnimationController;
   bool _isButtonHovered = false;
 
-  // User info
-  int? _userId;
-  String? _token;
+  // API services
+  final ApiService _apiService = ApiService();
+  final ApiReview _apiReview = ApiReview();
 
   @override
   void initState() {
@@ -52,66 +45,35 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
       vsync: this,
     );
 
-    // Load user data and fetch snacks
-    _loadUserDataAndFetchSnacks();
+    // Load data from API
+    _loadData();
   }
 
-  Future<void> _loadUserDataAndFetchSnacks() async {
+  Future<String?> _getToken() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token');
-
-      if (token != null) {
-        // Parse JWT token to get user ID
-        final parts = token.split('.');
-        if (parts.length == 3) {
-          final payload = parts[1].padRight(4 * ((parts[1].length + 3) ~/ 4), '=');
-          final normalized = base64Url.normalize(payload);
-          final decoded = utf8.decode(base64Url.decode(normalized));
-          final payloadMap = json.decode(decoded);
-
-          setState(() {
-            _userId = payloadMap['id'] as int?;
-            _token = token;
-          });
-
-          // Now fetch snacks with the user ID
-          if (_userId != null) {
-            _fetchSnacks();
-          } else {
-            if (mounted) {
-              setState(() {
-                _isLoading = false;
-                _isError = true;
-                _errorMessage = 'User ID not found in token';
-              });
-            }
-          }
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _isError = true;
-            _errorMessage = 'Authentication token not found';
-          });
-        }
-      }
+      return prefs.getString('jwt_token');
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _isError = true;
-          _errorMessage = 'Error loading user data: $e';
-        });
-      }
-      print('Error loading user data: $e');
+      print('Error getting token: $e');
+      return null;
     }
   }
 
-  Future<void> _fetchSnacks() async {
-    if (!mounted) return;
+  Future<int?> _getUserId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userInfoString = prefs.getString('user_info');
+      if (userInfoString != null) {
+        final userInfo = json.decode(userInfoString) as Map<String, dynamic>;
+        return userInfo['id'] as int?;
+      }
+    } catch (e) {
+      print('Error parsing user info: $e');
+    }
+    return null;
+  }
 
+  Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
       _isError = false;
@@ -119,70 +81,49 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
     });
 
     try {
-      if (_userId == null || _token == null) {
-        throw Exception('User ID or token is missing');
+      // Get token and user ID from shared preferences
+      final prefs = await SharedPreferences.getInstance();
+      final token = await _getToken();
+      final userId = await _getUserId();
+
+      if (token == null || userId == null) {
+        throw Exception('User not authenticated');
       }
 
-      // Use a timeout to prevent hanging indefinitely
-      final snacks = await _apiService.getSnacksByUserId(_userId!, _token!)
-          .timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw TimeoutException('Request timed out after 10 seconds');
-        },
-      );
+      // Fetch snacks by user ID
+      final snacks = await _apiService.getSnacksByUserId(userId, token);
 
-      // Only update state if the widget is still mounted
+      // Fetch review statistics for each snack
+      final Map<int, ReviewStatistic> reviewStats = {};
+      for (var snack in snacks) {
+        try {
+          final statsData = await _apiReview.getReviewStatistics(snack.id);
+          if (statsData != null) {
+            reviewStats[snack.id] = ReviewStatistic.fromJson(statsData);
+          }
+        } catch (e) {
+          print('Error fetching review stats for snack ${snack.id}: $e');
+          // Continue with next snack even if this one fails
+        }
+      }
+
+      // Update state with fetched data
       if (mounted) {
         setState(() {
           _snacks = snacks;
+          _reviewStats = reviewStats;
           _isLoading = false;
         });
-
-        // Fetch review statistics for each snack
-        _fetchReviewStatistics();
       }
     } catch (e) {
-      // Only update state if the widget is still mounted
+      print('Error loading data: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
           _isError = true;
-          _errorMessage = 'Failed to load snacks: ${e.toString()}';
+          _errorMessage = 'Failed to load data: ${e.toString()}';
         });
       }
-      print('Error fetching snacks: $e');
-    }
-  }
-
-  Future<void> _fetchReviewStatistics() async {
-    if (_snacks.isEmpty || !mounted) return;
-
-    try {
-      for (var snack in _snacks) {
-        if (!mounted) return; // Check if still mounted before each API call
-
-        try {
-          final stats = await _reviewStatService.getReviewStatistics(snack.id)
-              .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () {
-              throw TimeoutException('Review stats request timed out');
-            },
-          );
-
-          if (mounted) {
-            setState(() {
-              _reviewStats[snack.id] = stats;
-            });
-          }
-        } catch (e) {
-          print('Error fetching review stats for snack ${snack.id}: $e');
-          // Continue with other snacks even if one fails
-        }
-      }
-    } catch (e) {
-      print('Error in review statistics batch processing: $e');
     }
   }
 
@@ -204,9 +145,6 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
   void _showToast(String message) {
     // Remove any existing overlay first
     _removeOverlay();
-
-    // Only proceed if the context is still valid
-    if (!mounted) return;
 
     // Create a new overlay entry
     _overlayEntry = OverlayEntry(
@@ -259,60 +197,66 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
 
     // Auto-remove after 2 seconds
     Future.delayed(const Duration(seconds: 2), () {
-      if (_overlayEntry != null && mounted) {
+      if (_overlayEntry != null) {
         _removeOverlay();
       }
     });
   }
 
-  void _editSnack(Snack snack) {
-    if (!mounted) return;
-
-    showDialog(
+  Future<void> _editSnack(Snack snack) async {
+    final result = await showDialog<Snack>(
       context: context,
       builder: (BuildContext context) {
         return EditSnackDialog(
           snack: snack,
           onSave: (updatedSnack) async {
             try {
-              if (_token == null) {
-                throw Exception('Authentication token not found');
+              // Get token from shared preferences
+              final token = await _getToken();
+
+              if (token == null) {
+                throw Exception('User not authenticated');
               }
 
-              final result = await _apiService.updateSnack(updatedSnack, _token!)
-                  .timeout(
-                const Duration(seconds: 10),
-                onTimeout: () {
-                  throw TimeoutException('Update request timed out');
-                },
-              );
-
-              if (mounted) {
-                setState(() {
-                  // Find and replace the updated snack in the list
-                  final index = _snacks.indexWhere((s) => s.id == result.id);
-                  if (index != -1) {
-                    _snacks[index] = result;
-                  }
-                });
-                _showToast('${result.name} berhasil diperbarui');
-              }
+              // Update snack via API
+              final updatedSnackFromApi = await _apiService.updateSnack(updatedSnack, token);
+              return updatedSnackFromApi;
             } catch (e) {
-              if (mounted) {
-                _showToast('Gagal memperbarui: ${e.toString()}');
-              }
-              print('Error updating snack: $e');
+              _showToast('Failed to update: ${e.toString()}');
+              return null;
             }
           },
         );
       },
     );
+
+    if (result != null) {
+      setState(() {
+        // Find the index of the item to update
+        final index = _snacks.indexWhere((s) => s.id == result.id);
+        if (index != -1) {
+          // Replace the old item with the updated one
+          _snacks[index] = result;
+        }
+      });
+      _showToast('${result.name} berhasil diperbarui');
+
+      // Refresh review statistics for this snack
+      try {
+        final statsData = await _apiReview.getReviewStatistics(result.id);
+        if (statsData != null && mounted) {
+          setState(() {
+            _reviewStats[result.id] = ReviewStatistic.fromJson(statsData);
+          });
+        }
+      } catch (e) {
+        print('Error refreshing review stats: $e');
+      }
+    }
   }
 
-  void _deleteSnack(Snack snack) {
-    if (!mounted) return;
-
-    showDialog(
+  Future<void> _deleteSnack(Snack snack) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
@@ -332,7 +276,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(context, false),
               child: Text(
                 'Batal',
                 style: GoogleFonts.poppins(color: Colors.grey[600]),
@@ -346,36 +290,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              onPressed: () async {
-                Navigator.pop(context);
-
-                try {
-                  if (_token == null) {
-                    throw Exception('Authentication token not found');
-                  }
-
-                  await _apiService.deleteSnack(snack.id, _token!)
-                      .timeout(
-                    const Duration(seconds: 10),
-                    onTimeout: () {
-                      throw TimeoutException('Delete request timed out');
-                    },
-                  );
-
-                  if (mounted) {
-                    setState(() {
-                      _snacks.removeWhere((s) => s.id == snack.id);
-                      _reviewStats.remove(snack.id);
-                    });
-                    _showToast('${snack.name} berhasil dihapus');
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    _showToast('Gagal menghapus: ${e.toString()}');
-                  }
-                  print('Error deleting snack: $e');
-                }
-              },
+              onPressed: () => Navigator.pop(context, true),
               child: Text(
                 'Ya, Hapus!',
                 style: GoogleFonts.poppins(),
@@ -385,18 +300,45 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
         );
       },
     );
+
+    if (confirmed == true) {
+      try {
+        // Get token from shared preferences
+        final token = await _getToken();
+
+        if (token == null) {
+          throw Exception('User not authenticated');
+        }
+
+        // Delete snack via API
+        await _apiService.deleteSnack(snack.id, token);
+
+        // Update state
+        setState(() {
+          _snacks.remove(snack);
+          _reviewStats.remove(snack.id);
+        });
+
+        _showToast('${snack.name} berhasil dihapus');
+      } catch (e) {
+        _showToast('Failed to delete: ${e.toString()}');
+      }
+    }
   }
 
   void _viewSnackDetail(Snack snack) {
     // Navigate to detail page
-    _showToast('Detail: ${snack.name}');
-    // You can implement actual navigation here
-    // Navigator.of(context).pushNamed('/detailJajanan', arguments: snack);
+    Navigator.of(context).pushNamed('/detailJajanan', arguments: snack);
   }
 
   void _addNewSnack() {
     // Navigate to the tambahJajanan route
     Navigator.of(context).pushNamed('/tambahJajanan');
+  }
+
+  void _navigateToLogin() {
+    // Navigate to login page
+    Navigator.of(context).pushReplacementNamed('/login');
   }
 
   @override
@@ -435,6 +377,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                           'images/logo.png',
                           height: 32,
                           errorBuilder: (context, error, stackTrace) {
+                            // Fallback if image can't be loaded
                             return Container(
                               height: 32,
                               width: 32,
@@ -475,118 +418,59 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                   horizontal: size.width * 0.05,
                   vertical: size.height * 0.01,
                 ),
-                child: MouseRegion(
-                  onEnter: (_) => setState(() => _isButtonHovered = true),
-                  onExit: (_) => setState(() => _isButtonHovered = false),
-                  child: GestureDetector(
-                    onTap: _addNewSnack,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: _isButtonHovered
-                              ? [
-                            const Color(0xFF8BC34A),
-                            const Color(0xFF689F38),
-                          ]
-                              : [
-                            const Color(0xFF70AE6E),
-                            const Color(0xFF558B2F),
-                          ],
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Subtitle text moved to be inline with button
+                    Expanded(
+                      child: Text(
+                        'Kelola jajanan yang telah Anda tambahkan',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: Colors.grey[600],
                         ),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF70AE6E).withOpacity(_isButtonHovered ? 0.4 : 0.2),
-                            blurRadius: _isButtonHovered ? 12 : 8,
-                            spreadRadius: _isButtonHovered ? 2 : 0,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Animated plus icon
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Transform.rotate(
-                              angle: _isButtonHovered ? 0.2 : 0.0,
-                              child: const Icon(
-                                Icons.add_rounded,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Text with animation
-                          Text(
-                            'Tambahkan Jajanan',
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          // Arrow icon that appears on hover
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            width: _isButtonHovered ? 24 : 0,
-                            curve: Curves.easeInOut,
-                            child: _isButtonHovered
-                                ? const Icon(
-                              Icons.arrow_forward_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            )
-                                : const SizedBox.shrink(),
-                          ),
-                        ],
-                      ),
-                    ).animate(
-                      onPlay: (controller) => controller.repeat(reverse: true),
-                    ).shimmer(
-                      duration: 2000.ms,
-                      color: Colors.white.withOpacity(0.1),
-                      size: 0.2,
-                      delay: 1000.ms,
                     ),
-                  ),
-                ),
-              ).animate().fadeIn(delay: 300.ms, duration: 600.ms).slideY(
-                begin: -0.2,
-                end: 0,
-                curve: Curves.easeOutQuad,
-              ),
 
-              // Subtitle
-              Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: size.width * 0.05,
-                  vertical: size.height * 0.01,
-                ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Kelola jajanan yang telah Anda tambahkan',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                    // New elegant compact button
+                    MouseRegion(
+                      onEnter: (_) => setState(() => _isButtonHovered = true),
+                      onExit: (_) => setState(() => _isButtonHovered = false),
+                      child: GestureDetector(
+                        onTap: _addNewSnack,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _isButtonHovered ? const Color(0xFF8BC34A) : const Color(0xFF70AE6E),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF70AE6E).withOpacity(_isButtonHovered ? 0.3 : 0.1),
+                                blurRadius: _isButtonHovered ? 8 : 4,
+                                spreadRadius: _isButtonHovered ? 1 : 0,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.add_rounded,
+                            color: Colors.white,
+                            size: 24,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 2,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ).animate().fadeIn(delay: 200.ms, duration: 600.ms),
+              ).animate().fadeIn(delay: 300.ms, duration: 600.ms),
 
               const SizedBox(height: 16),
 
@@ -600,7 +484,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                     ? _buildEmptyState(size)
                     : RefreshIndicator(
                   color: const Color(0xFF70AE6E),
-                  onRefresh: _fetchSnacks,
+                  onRefresh: _loadData,
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: size.width * 0.04),
                     child: MasonryGridView.count(
@@ -630,69 +514,78 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
           ),
         ),
       ),
+      // No floating action button as requested
       bottomNavigationBar: const NavBar(),
     );
   }
 
   Widget _buildErrorState(Size size) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.red[50],
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.error_outline,
-                size: 64,
-                color: Colors.red[700],
-              ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.red[300],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Oops! Something went wrong',
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.red[400],
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Terjadi Kesalahan',
-              style: GoogleFonts.poppins(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.red[700],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
               _errorMessage,
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
-                fontSize: 16,
-                color: Colors.grey[700],
+                fontSize: 14,
+                color: Colors.grey[600],
               ),
             ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _fetchSnacks,
-              icon: const Icon(Icons.refresh),
-              label: Text(
-                'Coba Lagi',
-                style: GoogleFonts.poppins(),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _loadData,
+            icon: const Icon(Icons.refresh),
+            label: Text(
+              'Try Again',
+              style: GoogleFonts.poppins(),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF70AE6E),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 12,
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF70AE6E),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          if (_errorMessage.contains('User not authenticated'))
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: TextButton.icon(
+                onPressed: _navigateToLogin,
+                icon: const Icon(Icons.login),
+                label: Text(
+                  'Go to Login',
+                  style: GoogleFonts.poppins(),
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF70AE6E),
                 ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -744,7 +637,9 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
           ).animate().fadeIn(delay: 400.ms, duration: 400.ms),
           const SizedBox(height: 32),
           ElevatedButton.icon(
-            onPressed: _addNewSnack,
+            onPressed: () {
+              Navigator.of(context).pushNamed('/tambahJajanan');
+            },
             icon: const Icon(Icons.add),
             label: Text(
               'Tambah Jajanan Sekarang',
@@ -853,11 +748,9 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
 
   Widget _buildSnackItem(int index, Size size) {
     final snack = _snacks[index];
-    // Get review stats if available
-    final reviewStat = _reviewStats[snack.id];
-    final rating = reviewStat?.averageRating ?? 0.0;
-    final reviewCount = reviewStat?.reviewCount ?? 0;
-    print('Review Count: $reviewCount Review Rating: $rating' );
+    // Get review statistics for this snack, or use default values if not available
+    final reviewStat = _reviewStats[snack.id] ??
+        ReviewStatistic(reviewCount: 0, averageRating: 0.0);
 
     // Vary the height for visual interest
     final heightFactor = 1.2 + (index % 3) * 0.1;
@@ -888,7 +781,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                   child: Hero(
                     tag: 'snack-${snack.id}',
                     child: CachedNetworkImage(
-                      imageUrl: AppConfig.baseUrl + snack.imageUrl,
+                      imageUrl: snack.imageUrl,
                       placeholder: (context, url) => Container(
                         height: size.width * 0.5 * heightFactor,
                         color: Colors.grey[200],
@@ -964,6 +857,26 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                     ),
                   ),
                 ),
+                // Seller badge
+                Positioned(
+                  bottom: 12,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      snack.seller,
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
 
@@ -985,7 +898,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                     overflow: TextOverflow.ellipsis,
                   ),
 
-                  // Rating
+                  // Rating with review count from API
                   Row(
                     children: [
                       const Icon(
@@ -995,7 +908,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${rating} (${reviewCount})',
+                        '${reviewStat.averageRating.toStringAsFixed(1)} (${reviewStat.reviewCount})',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -1018,6 +931,29 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                       Expanded(
                         child: Text(
                           snack.location,
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Contact
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.phone,
+                        size: 14,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          snack.contact,
                           style: GoogleFonts.poppins(
                             fontSize: 12,
                             color: Colors.grey[600],
