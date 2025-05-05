@@ -49,30 +49,6 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
     _loadData();
   }
 
-  Future<String?> _getToken() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('jwt_token');
-    } catch (e) {
-      print('Error getting token: $e');
-      return null;
-    }
-  }
-
-  Future<int?> _getUserId() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userInfoString = prefs.getString('user_info');
-      if (userInfoString != null) {
-        final userInfo = json.decode(userInfoString) as Map<String, dynamic>;
-        return userInfo['id'] as int?;
-      }
-    } catch (e) {
-      print('Error parsing user info: $e');
-    }
-    return null;
-  }
-
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -83,8 +59,8 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
     try {
       // Get token and user ID from shared preferences
       final prefs = await SharedPreferences.getInstance();
-      final token = await _getToken();
-      final userId = await _getUserId();
+      final token = await prefs.getString('jwt_token');
+      final userId = await prefs.getInt('user_id');
 
       if (token == null || userId == null) {
         throw Exception('User not authenticated');
@@ -212,7 +188,8 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
           onSave: (updatedSnack) async {
             try {
               // Get token from shared preferences
-              final token = await _getToken();
+              final prefs = await SharedPreferences.getInstance();
+              final token = await prefs.getString('token');
 
               if (token == null) {
                 throw Exception('User not authenticated');
@@ -304,7 +281,8 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
     if (confirmed == true) {
       try {
         // Get token from shared preferences
-        final token = await _getToken();
+        final prefs = await SharedPreferences.getInstance();
+        final token = await prefs.getString('token');
 
         if (token == null) {
           throw Exception('User not authenticated');
@@ -781,7 +759,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                   child: Hero(
                     tag: 'snack-${snack.id}',
                     child: CachedNetworkImage(
-                      imageUrl: snack.imageUrl,
+                      imageUrl: '${AppConfig.baseUrl}${snack.imageUrl}',
                       placeholder: (context, url) => Container(
                         height: size.width * 0.5 * heightFactor,
                         color: Colors.grey[200],
