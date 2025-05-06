@@ -454,7 +454,7 @@ class _FavoritePageState extends State<FavoritePage> {
           ),
           const SizedBox(height: 16),
           Text(
-            'No Favorites Yet',
+            'Belum ada Jajanan Favorit',
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -462,7 +462,7 @@ class _FavoritePageState extends State<FavoritePage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Start adding your favorite snacks!',
+            'Ayo tambahkan jajanan favoritmu ke sini!',
             style: GoogleFonts.poppins(
               fontSize: 14,
               color: Colors.grey[600],

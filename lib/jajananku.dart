@@ -606,7 +606,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
           ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
           const SizedBox(height: 12),
           Text(
-            'Anda belum menambahkan jajanan apapun.',
+            'Anda belum menambahkan jajanan',
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 16,

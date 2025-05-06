@@ -13,7 +13,6 @@ import 'models/snack.dart';
 import 'models/reviewStatistic.dart';
 import 'services/api_review.dart';
 import 'services/api_snack.dart';
-import 'services/api_review.dart';
 
 class MyReviewPage extends StatefulWidget {
   const MyReviewPage({Key? key}) : super(key: key);
@@ -436,11 +435,6 @@ class _MyReviewPageState extends State<MyReviewPage> {
     );
   }
 
-  void _addNewReview() {
-    _showToast('Tambah Review Baru');
-    // Navigate to snack list or implement new review functionality
-  }
-
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -678,41 +672,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
             ),
           ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
           const SizedBox(height: 12),
-          Text(
-            'Anda belum memberikan review apapun.',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              color: Colors.grey[600],
-            ),
-          ).animate().fadeIn(delay: 400.ms, duration: 400.ms),
-          const SizedBox(height: 32),
-          ElevatedButton.icon(
-            onPressed: _addNewReview,
-            icon: const Icon(Icons.add),
-            label: Text(
-              'Tambah Review Sekarang',
-              style: GoogleFonts.poppins(fontSize: 16),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF70AE6E),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 16,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 4,
-              shadowColor: const Color(0xFF70AE6E).withOpacity(0.4),
-            ),
-          ).animate().fadeIn(delay: 600.ms, duration: 400.ms).slideY(
-            begin: 0.2,
-            end: 0,
-            delay: 600.ms,
-            curve: Curves.easeOutQuad,
-          ),
+          // "Tambahkan Review" button has been removed as requested
         ],
       ),
     );

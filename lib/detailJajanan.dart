@@ -438,6 +438,13 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
     // This is an estimate - adjust if your NavBar has a different height
     final navBarHeight = 80.0;
     final snack = ModalRoute.of(context)!.settings.arguments as Snack;
+
+    // Check if snack is top rated (rating > 4.5 and at least 5 reviews)
+    final bool isTopRated = !_isLoadingStats &&
+        _reviewStatistic != null &&
+        _reviewStatistic!.averageRating > 4.5 &&
+        _reviewStatistic!.reviewCount >= 5;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
@@ -510,76 +517,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                   ],
                 ),
               ) : null,
-              actions: [
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _isFavorite = !_isFavorite;
-                    });
-                    if (_isFavorite) {
-                      _heartController.reset();
-                      _heartController.forward();
-                    }
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.all(8),
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _showTitle
-                          ? Colors.white.withOpacity(0.3)
-                          : const Color(0xFF8BC34A).withOpacity(0.8),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 4,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      _isFavorite ? Icons.favorite : Icons.favorite_border,
-                      color: _isFavorite ? Colors.red : Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () {
-                    // Share functionality
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Sharing this food...'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.all(8),
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _showTitle
-                          ? Colors.white.withOpacity(0.3)
-                          : const Color(0xFF8BC34A).withOpacity(0.8),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 4,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.share,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
+              // Removed heart and share buttons from actions
+              actions: const [], // Empty actions list
             );
           },
         ),
@@ -758,21 +697,23 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                             ),
                                           ),
                                           const SizedBox(height: 4),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF8BC34A).withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: const Text(
-                                              'Top Rated',
-                                              style: TextStyle(
-                                                color: Color(0xFF689F38),
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
+                                          // Only show Top Rated badge if conditions are met
+                                          if (isTopRated)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF8BC34A).withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: const Text(
+                                                'Top Rated',
+                                                style: TextStyle(
+                                                  color: Color(0xFF689F38),
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                             ),
-                                          ),
                                         ],
                                       ),
                                     ),
@@ -979,14 +920,14 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                     ),
                                     const SizedBox(width: 12),
 
-                                    // Tags
+                                    // Tags - Updated to use snack.type instead of hardcoded "Food"
                                     Expanded(
                                       child: SingleChildScrollView(
                                         scrollDirection: Axis.horizontal,
                                         physics: const BouncingScrollPhysics(),
                                         child: Row(
                                           children: [
-                                            _buildTag('Food', Icons.fastfood),
+                                            _buildTag(snack.type, _getIconForType(snack.type)),
                                           ],
                                         ),
                                       ),
@@ -1356,8 +1297,27 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
       ),
       // Use extendBody to make the body extend behind the navbar
       extendBody: true,
-      bottomNavigationBar: const NavBar(),
+      bottomNavigationBar: const NavBar(
+        // Don't set a selectedIndex here since this is a detail page
+        // or you can set it to match the page you came from
+      ),
     );
+  }
+
+  // Helper method to get icon based on food type
+  IconData _getIconForType(String type) {
+    switch (type.toLowerCase()) {
+      case 'drink':
+        return Icons.local_drink;
+      case 'dessert':
+        return Icons.cake;
+      case 'snack':
+        return Icons.fastfood;
+      case 'food':
+        return Icons.restaurant;
+      default:
+        return Icons.fastfood;
+    }
   }
 
   Widget _buildTag(String label, IconData icon) {
