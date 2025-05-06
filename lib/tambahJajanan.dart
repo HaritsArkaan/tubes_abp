@@ -190,8 +190,8 @@ class _AddSnackPageState extends State<AddSnackPage> {
     try {
       // Get user token from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      final userId = prefs.getInt('userId');
+      final token = prefs.getString('jwt_token');
+      final userId = prefs.getInt('user_id');
 
       if (token == null || userId == null) {
         _hideLoadingDialog();
