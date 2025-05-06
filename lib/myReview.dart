@@ -841,7 +841,7 @@ class _MyReviewPageState extends State<MyReviewPage> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          averageRating.toString(),
+                          averageRating.toStringAsFixed(1),
                           style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 12,

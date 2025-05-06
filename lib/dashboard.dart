@@ -298,10 +298,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
 
   // Navigate to detail page
   void _navigateToDetailPage(Snack snack) {
-    Navigator.pushNamed(
-      context,
+    Navigator.of(context).pushNamed(
       '/detailJajanan',
-      arguments: snack,
+      arguments: snack, // Passing the snack object
     );
   }
 

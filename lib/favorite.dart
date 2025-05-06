@@ -231,6 +231,8 @@ class _FavoritePageState extends State<FavoritePage> {
         _snacks.remove(snackId);
         _reviewStats.remove(snackId);
       });
+    } catch (e) {
+      print('Error toggling favorite: $e');
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
@@ -240,17 +242,7 @@ class _FavoritePageState extends State<FavoritePage> {
           duration: Duration(seconds: 2),
         ),
       );
-    } catch (e) {
-      print('Error toggling favorite: $e');
-
-      // Show error message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update favorite: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      _loadFavorites();
     }
   }
 
@@ -261,13 +253,13 @@ class _FavoritePageState extends State<FavoritePage> {
 
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
               Colors.white,
-              const Color(0xFFF5F9F5),
+              Color(0xFFF5F9F5),
             ],
           ),
         ),

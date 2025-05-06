@@ -101,15 +101,15 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
       final token = prefs.getString('jwt_token');
 
       // Only consider guest mode if explicitly set AND no token exists
-      final isExplicitlyGuest = prefs.getBool('is_guest_mode') ?? false;
+      // final isExplicitlyGuest = prefs.getBool('is_guest_mode') ?? false;
 
       if (mounted) {
         setState(() {
           // User is in guest mode if they have no token OR they're explicitly in guest mode
-          _isGuestMode = token == null || isExplicitlyGuest;
+          _isGuestMode = token == null;
 
           // Debug output to help troubleshoot
-          print('Login status check: token=${token != null}, isExplicitlyGuest=$isExplicitlyGuest, _isGuestMode=$_isGuestMode');
+          print('Login status check: token=${token != null}, _isGuestMode=$_isGuestMode');
         });
       }
     } catch (e) {
@@ -371,6 +371,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
       return;
     }
 
+    // Get the snack from route arguments BEFORE showing the dialog
+    final Snack snack = ModalRoute.of(context)!.settings.arguments as Snack;
+
     double _selectedRating = 0;
     final TextEditingController _reviewController = TextEditingController();
 
@@ -521,32 +524,109 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           if (_selectedRating > 0 && _reviewController.text.isNotEmpty) {
-                            // Add the review
-                            // In a real app, you would call an API to save the review
+                            // Show loading indicator
                             Navigator.pop(context);
-
-                            // Show success message
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Row(
+                              const SnackBar(
+                                content: Row(
                                   children: [
-                                    Icon(Icons.check_circle, color: Colors.white),
+                                    SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
                                     SizedBox(width: 12),
-                                    Text('Review added successfully!'),
+                                    Text('Submitting your review...'),
                                   ],
                                 ),
-                                backgroundColor: const Color(0xFF8BC34A),
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                margin: const EdgeInsets.all(12),
+                                backgroundColor: Color(0xFF8BC34A),
+                                duration: Duration(seconds: 2), // Long duration as we'll dismiss it manually
                               ),
                             );
+
+                            try {
+                              // Get the current user ID from SharedPreferences
+                              final prefs = await SharedPreferences.getInstance();
+                              final userId = prefs.getInt('user_id');
+                              final token = prefs.getString('jwt_token');
+
+                              if (userId == null || token == null) {
+                                throw Exception('User not logged in');
+                              }
+
+                              final review = Review(
+                                id: 0,
+                                userId: userId,
+                                snackId: snack.id,
+                                rating: _selectedRating,
+                                content: _reviewController.text,
+                              );
+
+                              // Call the API to create the review
+                              await _apiReview.createReview(review, token);
+
+                              // Dismiss the loading snackbar
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+                              // Show success message
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Row(
+                                    children: [
+                                      Icon(Icons.check_circle, color: Colors.white),
+                                      SizedBox(width: 12),
+                                      Text('Review added successfully!'),
+                                    ],
+                                  ),
+                                  backgroundColor: const Color(0xFF8BC34A),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  margin: const EdgeInsets.all(12),
+                                ),
+                              );
+
+                              // Refresh the reviews and statistics
+                              if (mounted) {
+                                final snack = ModalRoute.of(context)?.settings.arguments as Snack?;
+                                if (snack != null) {
+                                  _fetchReviewStatistics(snack.id);
+                                  _fetchReviews(snack.id);
+                                }
+                              }
+                            } catch (e) {
+                              // Dismiss the loading snackbar
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+                              // Show error message
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.error, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Expanded(child: Text('Failed to add review: ${e.toString()}')),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.red,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  margin: const EdgeInsets.all(12),
+                                ),
+                              );
+                              final snack = ModalRoute.of(context)?.settings.arguments as Snack?;
+                              print('Error adding review: $e');
+                            }
                           } else {
-                            // Show error message
+                            // Show error message for invalid input
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: const Row(
@@ -928,11 +1008,11 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                           setState(() {
                                             _isFavorite = !_isFavorite;
                                           });
-                                        if (_isFavorite) {
-                                        _heartController.reset();
-                                        _heartController.forward();
+                                          if (_isFavorite) {
+                                            _heartController.reset();
+                                            _heartController.forward();
+                                          }
                                         }
-                                      }
                                       },
                                       child: Stack(
                                         children: [

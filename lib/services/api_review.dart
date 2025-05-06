@@ -65,6 +65,26 @@ class ApiReview {
     }
   }
 
+  Future<void> createReview(Review review, String token) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/reviews'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode(review.toJson()),
+      );
+
+      if (response.statusCode != 201) {
+        throw Exception('Failed to create review: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error creating review: $e');
+      throw Exception('Failed to create review: $e');
+    }
+  }
+
   Future<void> updateReview(Review review, String token) async {
     try {
       final response = await http.put(
