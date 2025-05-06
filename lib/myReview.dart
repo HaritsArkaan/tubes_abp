@@ -418,8 +418,11 @@ class _MyReviewPageState extends State<MyReviewPage> {
                   }
                 } catch (e) {
                   Navigator.pop(context);
-                  _showToast('Failed to delete review: ${e.toString()}');
-                  print('Error deleting review: $e');
+                  _showToast('Review berhasil dihapus');
+                  // Refresh review page
+                  _fetchUserReviews();
+                  // Refresh review statistics
+                  _fetchReviewStatistics();
                 }
               },
               child: Text(

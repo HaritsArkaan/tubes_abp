@@ -7,9 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:like_button/like_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
-import 'dart:convert';
 import 'navbar.dart';
-import 'detailJajanan.dart';
 import 'models/favorite.dart';
 import 'models/snack.dart';
 import 'models/reviewStatistic.dart';
@@ -214,13 +212,22 @@ class _FavoritePageState extends State<FavoritePage> {
     }
   }
 
-  // Toggle favorite status
-  Future<void> _toggleFavorite(int snackId) async {
+  Future<void> _toggleFavorite(int favoriteId, int snackId) async {
     try {
-      // Here you would call the API to toggle the favorite status
-      // For now, we'll just remove it from the local list
+      // Get token from shared preferences
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+
+      if (token == null) {
+        throw Exception('User not authenticated');
+      }
+
+      // Call API to delete favorite
+      await _apiFavorite.deleteFavorite(favoriteId, _token);
+
+      // Update local state
       setState(() {
-        _favorites.removeWhere((favorite) => favorite.snackId == snackId);
+        _favorites.removeWhere((favorite) => favorite.id == favoriteId);
         _snacks.remove(snackId);
         _reviewStats.remove(snackId);
       });
@@ -246,6 +253,7 @@ class _FavoritePageState extends State<FavoritePage> {
       );
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -601,7 +609,14 @@ class _FavoritePageState extends State<FavoritePage> {
                     );
                   },
                   onTap: (isLiked) async {
-                    await _toggleFavorite(snack.id);
+                    final favorite = _favorites.firstWhere(
+                          (fav) => fav.snackId == snack.id,
+                      orElse: () => Favorite(id: -1, userId: _userId, snackId: snack.id),
+                    );
+
+                    if (favorite.id != -1) {
+                      await _toggleFavorite(favorite.id, snack.id);
+                    }
                     return false; // We handle the state change manually
                   },
                 ),

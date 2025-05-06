@@ -282,7 +282,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
       try {
         // Get token from shared preferences
         final prefs = await SharedPreferences.getInstance();
-        final token = await prefs.getString('token');
+        final token = await prefs.getString('jwt_token');
 
         if (token == null) {
           throw Exception('User not authenticated');

@@ -83,6 +83,29 @@ class ApiService {
       throw Exception('Failed to load snacks by category: $e');
     }
   }
+
+  // Add a new snack
+  Future<Snack> addSnack(Snack snack, String token) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/api/snacks'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode(snack.toJson()),
+      );
+
+      if (response.statusCode == 201) {
+        return Snack.fromJson(json.decode(response.body));
+      } else {
+        throw Exception('Failed to add snack: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error adding snack: $e');
+    }
+  }
+
   Future<Snack> updateSnack(Snack snack, String token) async {
     try {
       final response = await http.put(
