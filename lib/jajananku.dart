@@ -13,6 +13,7 @@ import 'models/reviewStatistic.dart';
 import 'services/api_snack.dart';
 import 'services/api_review.dart';
 import 'config.dart';
+import 'package:flutter/services.dart';
 
 class JajananKu extends StatefulWidget {
   const JajananKu({Key? key}) : super(key: key);
@@ -30,6 +31,7 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
   OverlayEntry? _overlayEntry;
   late AnimationController _buttonAnimationController;
   bool _isButtonHovered = false;
+  bool _isButtonPressed = false;
 
   // API services
   final ApiService _apiService = ApiService();
@@ -410,40 +412,86 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
                       ),
                     ),
 
-                    // New elegant compact button
-                    MouseRegion(
-                      onEnter: (_) => setState(() => _isButtonHovered = true),
-                      onExit: (_) => setState(() => _isButtonHovered = false),
-                      child: GestureDetector(
-                        onTap: _addNewSnack,
+                    // Redesigned elegant add button
+                    GestureDetector(
+                      onTapDown: (_) => setState(() => _isButtonPressed = true),
+                      onTapUp: (_) => setState(() => _isButtonPressed = false),
+                      onTapCancel: () => setState(() => _isButtonPressed = false),
+                      onTap: () {
+                        // Add haptic feedback
+                        HapticFeedback.lightImpact();
+                        _addNewSnack();
+                      },
+                      child: MouseRegion(
+                        onEnter: (_) => setState(() => _isButtonHovered = true),
+                        onExit: (_) => setState(() => _isButtonHovered = false),
                         child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          padding: const EdgeInsets.all(12),
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOutCubic,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           decoration: BoxDecoration(
-                            color: _isButtonHovered ? const Color(0xFF8BC34A) : const Color(0xFF70AE6E),
-                            shape: BoxShape.circle,
+                            color: _isButtonPressed
+                                ? const Color(0xFF5D9A5A)
+                                : _isButtonHovered
+                                ? const Color(0xFF8BC34A)
+                                : const Color(0xFF70AE6E),
+                            borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF70AE6E).withOpacity(_isButtonHovered ? 0.3 : 0.1),
-                                blurRadius: _isButtonHovered ? 8 : 4,
-                                spreadRadius: _isButtonHovered ? 1 : 0,
-                                offset: const Offset(0, 2),
+                                color: const Color(0xFF70AE6E).withOpacity(_isButtonPressed ? 0.1 : _isButtonHovered ? 0.3 : 0.2),
+                                blurRadius: _isButtonPressed ? 4 : _isButtonHovered ? 8 : 6,
+                                spreadRadius: _isButtonPressed ? 0 : _isButtonHovered ? 2 : 1,
+                                offset: _isButtonPressed
+                                    ? const Offset(0, 1)
+                                    : const Offset(0, 2),
+                              ),
+                            ],
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.add_rounded,
+                                color: Colors.white,
+                                size: 20,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 2,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Add',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black.withOpacity(0.2),
+                                      blurRadius: 2,
+                                      offset: const Offset(0, 1),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
-                          child: Icon(
-                            Icons.add_rounded,
-                            color: Colors.white,
-                            size: 24,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 2,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
-                          ),
-                        ),
+                        ).animate(
+                          target: _isButtonHovered ? 1 : 0,
+                        ).scale(
+                          begin: const Offset(1.0, 1.0),
+                          end: const Offset(1.05, 1.05),
+                          duration: 200.ms,
+                          curve: Curves.easeOutCubic,
+                        )
                       ),
                     ),
                   ],

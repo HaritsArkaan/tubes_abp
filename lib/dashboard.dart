@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
-import 'package:shimmer/shimmer.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -203,7 +203,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
   }
 
   // Fetch snacks by category
-  // Update the _fetchSnacksByCategory method
   Future<void> _fetchSnacksByCategory(String category) async {
     setState(() {
       _isLoading = true;
@@ -383,21 +382,10 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
               CircleAvatar(
                 radius: 40,
                 backgroundColor: Colors.green.shade100,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(40),
-                  child: Image.asset(
-                    'images/profile.jpg',
-                    width: 80,
-                    height: 80,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        Icons.person,
-                        size: 40,
-                        color: Colors.green.shade700,
-                      );
-                    },
-                  ),
+                child: Icon(
+                  Icons.person,
+                  size: 40,
+                  color: Colors.green.shade700,
                 ),
               ),
               const SizedBox(height: 15),
@@ -410,36 +398,64 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
               ),
               const SizedBox(height: 5),
               Text(
-                'SnackHunt Member',
+                _userName == 'Guest' ? 'Continue as guest' : 'SnackHunt Member',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[600],
                 ),
               ),
               const SizedBox(height: 30),
-              ListTile(
-                leading: Icon(
-                  Icons.person_outline,
-                  color: Colors.green.shade700,
+
+              // Show different options based on user status
+              if (_userName == 'Guest') ...[
+                ListTile(
+                  leading: Icon(
+                    Icons.login,
+                    color: Colors.green.shade700,
+                  ),
+                  title: const Text('Login'),
+                  onTap: () {
+                    Navigator.pop(context); // Close bottom sheet
+                    Navigator.pushNamed(context, '/login');
+                  },
                 ),
-                title: const Text('View Profile'),
-                onTap: () {
-                  Navigator.pop(context); // Close bottom sheet
-                  _navigateToProfile();
-                },
-              ),
-              const Divider(height: 0),
-              ListTile(
-                leading: const Icon(
-                  Icons.logout,
-                  color: Colors.red,
+                const Divider(height: 0),
+                ListTile(
+                  leading: Icon(
+                    Icons.app_registration,
+                    color: Colors.green.shade700,
+                  ),
+                  title: const Text('Register'),
+                  onTap: () {
+                    Navigator.pop(context); // Close bottom sheet
+                    Navigator.pushNamed(context, '/register');
+                  },
                 ),
-                title: const Text('Logout'),
-                onTap: () {
-                  Navigator.pop(context); // Close bottom sheet
-                  _logout();
-                },
-              ),
+              ] else ...[
+                ListTile(
+                  leading: Icon(
+                    Icons.person_outline,
+                    color: Colors.green.shade700,
+                  ),
+                  title: const Text('View Profile'),
+                  onTap: () {
+                    Navigator.pop(context); // Close bottom sheet
+                    _navigateToProfile();
+                  },
+                ),
+                const Divider(height: 0),
+                ListTile(
+                  leading: const Icon(
+                    Icons.logout,
+                    color: Colors.red,
+                  ),
+                  title: const Text('Logout'),
+                  onTap: () {
+                    Navigator.pop(context); // Close bottom sheet
+                    _logout();
+                  },
+                ),
+              ],
             ],
           ),
         );
@@ -647,10 +663,67 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
     );
   }
 
+  // Add a method to check if user is logged in
+  bool _isLoggedIn() {
+    return _userName != 'Guest';
+  }
+
+  // Add a method to show login prompt dialog
+  void _showLoginPrompt(String feature) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.lock_outline,
+                color: Colors.green.shade700,
+                size: 24,
+              ),
+              const SizedBox(width: 10),
+              const Text('Login Required'),
+            ],
+          ),
+          content: Text(
+            'You need to login to access $feature. Would you like to login now?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey[700]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.pushNamed(context, '/login');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade700,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Login'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Update the _buildHeader method to show different UI for guest users
   Widget _buildHeader(BuildContext context) {
-    final size = MediaQuery
-        .of(context)
-        .size;
+    final size = MediaQuery.of(context).size;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -757,7 +830,8 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(
                                 size.width * 0.05),
-                            child: Image.asset(
+                            child: _isLoggedIn()
+                                ? Image.asset(
                               'images/profile.jpg',
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) {
@@ -769,6 +843,13 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                   ),
                                 );
                               },
+                            )
+                                : CircleAvatar(
+                              backgroundColor: Colors.green.shade200,
+                              child: Icon(
+                                Icons.person,
+                                color: Colors.green.shade700,
+                              ),
                             ),
                           ),
                         ),
@@ -782,7 +863,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Hello, $_userName!',
+                              _isLoggedIn() ? 'Hello, $_userName!' : 'Hello, Guest!',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -790,7 +871,9 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                               ),
                             ),
                             Text(
-                              'Craving something delicious today?',
+                              _isLoggedIn()
+                                  ? 'Craving something delicious today?'
+                                  : 'Login to access all features',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey[600],
@@ -801,6 +884,36 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           ],
                         ),
                       ),
+
+                      // Login button for guest users
+                      if (!_isLoggedIn())
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pushNamed(context, '/login');
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade700,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.green.shade700.withOpacity(0.3),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Text(
+                              'Login',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -2777,85 +2890,63 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
 
 // Add a method to show all products in a full view
   Widget _buildAllProductsFullView(BuildContext context) {
-    final size = MediaQuery.of(context).size;
+    final size = MediaQuery
+        .of(context)
+        .size;
 
     return Container(
       height: size.height * 0.85,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            spreadRadius: 0,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
-          // Handle bar
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 8),
-            child: Container(
-              width: 40,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(10),
-              ),
+          // Handle
+          Container(
+            margin: const EdgeInsets.only(top: 10),
+            width: 50,
+            height: 5,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(10),
             ),
           ),
-
-          // Header with animation
+          // Header
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.green.shade50,
-                  Colors.white,
+                  Colors.green.shade700.withOpacity(0.2),
+                  Colors.green.shade700.withOpacity(0.1),
                 ],
-              ),
-              border: Border(
-                bottom: BorderSide(
-                  color: Colors.grey.shade200,
-                  width: 1,
-                ),
               ),
             ),
             child: Row(
               children: [
-                // Icon with container
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.green.shade50,
+                    color: Colors.white,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.green.shade700.withOpacity(0.2),
+                        color: Colors.green.shade700.withOpacity(0.3),
                         blurRadius: 8,
                         spreadRadius: 1,
                       ),
                     ],
-                    border: Border.all(
-                      color: Colors.green.shade100,
-                      width: 1,
-                    ),
                   ),
                   child: Icon(
-                    Icons.store_mall_directory_rounded,
+                    Icons.fastfood,
                     color: Colors.green.shade700,
                     size: 24,
                   ),
                 ),
-                const SizedBox(width: 16),
-
-                // Title and subtitle
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2863,14 +2954,13 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                       Text(
                         'All Products',
                         style: TextStyle(
-                          fontSize: 20,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.green.shade800,
+                          color: Colors.green.shade700,
                         ),
                       ),
-                      const SizedBox(height: 4),
                       Text(
-                        '${_snacks.length} delicious items available',
+                        '${_snacks.length} items found',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey[600],
@@ -2879,195 +2969,27 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                     ],
                   ),
                 ),
-
-                // Close button
-                Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(30),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(30),
-                    onTap: () => Navigator.pop(context),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Icon(
-                        Icons.close_rounded,
-                        color: Colors.grey[700],
-                        size: 24,
-                      ),
-                    ),
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
           ),
-
-          // Filter options
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: Row(
-              children: [
-                // Sort dropdown
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.sort_rounded,
-                          size: 18,
-                          color: Colors.grey[700],
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Sort by: Popular',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[800],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(
-                          Icons.arrow_drop_down,
-                          color: Colors.grey[700],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-
-                // Filter button
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green.shade200),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.filter_list_rounded,
-                        size: 18,
-                        color: Colors.green.shade700,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Filter',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.green.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
+          const Divider(height: 1),
           // Grid of items
           Expanded(
-            child: _snacks.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.fastfood_outlined,
-                      size: 60,
-                      color: Colors.green.shade300,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'No products available',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Check back later for new items',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Refresh'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade700,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )
-                : GridView.builder(
+            child: GridView.builder(
               padding: const EdgeInsets.all(16),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: 0.7,
+                childAspectRatio: 0.75,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
               ),
               itemCount: _snacks.length,
               itemBuilder: (context, index) {
                 final snack = _snacks[index];
-
-                // Get type-specific color and icon
-                Color typeColor;
-                IconData typeIcon;
-
-                switch (snack.type.toLowerCase()) {
-                  case 'food':
-                    typeColor = Colors.orange;
-                    typeIcon = Icons.restaurant;
-                    break;
-                  case 'drink':
-                    typeColor = Colors.pink;
-                    typeIcon = Icons.local_drink;
-                    break;
-                  case 'dessert':
-                    typeColor = Colors.red;
-                    typeIcon = Icons.cake;
-                    break;
-                  case 'snack':
-                    typeColor = const Color(0xFFBE8C63);
-                    typeIcon = Icons.fastfood;
-                    break;
-                  default:
-                    typeColor = Colors.green.shade700;
-                    typeIcon = Icons.fastfood;
-                }
-
                 return GestureDetector(
                   onTap: () {
                     Navigator.pop(context);
@@ -3076,7 +2998,7 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.05),
@@ -3085,10 +3007,6 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                           offset: const Offset(0, 4),
                         ),
                       ],
-                      border: Border.all(
-                        color: Colors.grey.shade200,
-                        width: 1,
-                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3096,71 +3014,54 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                         // Product image
                         Stack(
                           children: [
-                            // Image with shimmer loading effect
                             ClipRRect(
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                              borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(12)),
                               child: snack.imageUrl.isNotEmpty
                                   ? Image.network(
                                 AppConfig.baseUrl + snack.imageUrl,
-                                height: size.width * 0.35,
+                                height: size.width * 0.3,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
-                                loadingBuilder: (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  return Shimmer.fromColors(
-                                    baseColor: Colors.grey[300]!,
-                                    highlightColor: Colors.grey[100]!,
-                                    child: Container(
-                                      height: size.width * 0.35,
-                                      color: Colors.white,
-                                    ),
-                                  );
-                                },
                                 errorBuilder: (context, error, stackTrace) {
                                   return Container(
-                                    height: size.width * 0.35,
-                                    color: Colors.grey[200],
-                                    child: Icon(
-                                      Icons.image_not_supported_rounded,
-                                      color: Colors.grey[400],
-                                      size: 32,
-                                    ),
+                                    height: size.width * 0.3,
+                                    color: Colors.grey[300],
+                                    child: const Icon(Icons.image_not_supported,
+                                        color: Colors.grey),
                                   );
                                 },
                               )
                                   : Container(
-                                height: size.width * 0.35,
-                                color: Colors.grey[200],
-                                child: Icon(
-                                  Icons.image_not_supported_rounded,
-                                  color: Colors.grey[400],
-                                  size: 32,
-                                ),
+                                height: size.width * 0.3,
+                                color: Colors.grey[300],
+                                child: const Icon(Icons.image_not_supported,
+                                    color: Colors.grey),
                               ),
                             ),
-
                             // Type badge
                             Positioned(
                               top: 8,
                               left: 8,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: typeColor.withOpacity(0.9),
+                                  color: Colors.green.shade700.withOpacity(0.8),
                                   borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      typeIcon,
+                                      snack.type.toLowerCase() == 'food'
+                                          ? Icons.restaurant
+                                          : snack.type.toLowerCase() == 'drink'
+                                          ? Icons.local_drink
+                                          : snack.type.toLowerCase() ==
+                                          'dessert'
+                                          ? Icons.cake
+                                          : Icons.fastfood,
                                       color: Colors.white,
                                       size: 12,
                                     ),
@@ -3177,23 +3078,16 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                 ),
                               ),
                             ),
-
                             // Rating badge
                             Positioned(
                               bottom: 8,
                               right: 8,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.7),
+                                  color: Colors.black.withOpacity(0.6),
                                   borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.2),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -3216,95 +3110,34 @@ class _DashboardPageState extends State<DashboardPage> with SingleTickerProvider
                                 ),
                               ),
                             ),
-
-                            // Favorite button
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.9),
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.1),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  Icons.favorite_border_rounded,
-                                  color: Colors.red[400],
-                                  size: 16,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
-
                         // Product details
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Name
-                                Text(
-                                  snack.name,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF2E3E5C),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                        Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                snack.name,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF2E3E5C),
                                 ),
-                                const SizedBox(height: 4),
-
-                                // Seller
-                                Text(
-                                  snack.seller,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Rp${snack.price.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green.shade700,
                                 ),
-
-                                const Spacer(),
-
-                                // Price and arrow
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Rp${snack.price.toStringAsFixed(0)}',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                        color: typeColor,
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: typeColor.withOpacity(0.1),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.arrow_forward_ios_rounded,
-                                        size: 12,
-                                        color: typeColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

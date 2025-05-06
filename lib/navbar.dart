@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class NavBar extends StatefulWidget {
   const NavBar({
@@ -12,6 +13,7 @@ class NavBar extends StatefulWidget {
 
 class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
   int _selectedIndex = 0;
+  bool _isLoggedIn = false;
   late AnimationController _bounceController;
   late AnimationController _rippleController;
   late AnimationController _rotationController;
@@ -42,6 +44,9 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+
+    // Check login status
+    _checkLoginStatus();
 
     // Determine the current route and set the selected index accordingly
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -96,6 +101,68 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
     _slideController.forward();
   }
 
+  // Check if user is logged in
+  Future<void> _checkLoginStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token');
+    setState(() {
+      _isLoggedIn = token != null;
+    });
+  }
+
+  // Show login prompt dialog
+  void _showLoginPrompt(String feature) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.lock_outline,
+                color: Colors.green.shade700,
+                size: 24,
+              ),
+              const SizedBox(width: 10),
+              const Text('Login Required'),
+            ],
+          ),
+          content: Text(
+            'You need to login to access $feature. Would you like to login now?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey[700]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.pushNamed(context, '/login');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade700,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Login'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _updateSelectedIndexBasedOnRoute() {
     final currentRoute = ModalRoute.of(context)?.settings.name ?? '';
 
@@ -137,6 +204,14 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
   }
 
   void _onItemTapped(int index) {
+    // Check if user is trying to access a protected feature
+    if (!_isLoggedIn && index > 0) {
+      // Show login prompt for protected features
+      String featureName = index == 1 ? 'Jajananku' : index == 2 ? 'Favorite' : 'Review';
+      _showLoginPrompt(featureName);
+      return;
+    }
+
     if (_selectedIndex != index) {
       setState(() {
         _selectedIndex = index;
@@ -282,6 +357,8 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
 
   Widget _buildNavItem(int index, IconData icon, IconData activeIcon, String label) {
     final isSelected = _selectedIndex == index;
+    final isProtected = index > 0; // All items except Home are protected
+    final isDisabled = isProtected && !_isLoggedIn;
 
     return GestureDetector(
       onTap: () => _onItemTapped(index),
@@ -293,29 +370,60 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const SizedBox(height: 10),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              transitionBuilder: (child, animation) {
-                return ScaleTransition(
-                  scale: animation,
-                  child: FadeTransition(
-                    opacity: animation,
-                    child: child,
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  transitionBuilder: (child, animation) {
+                    return ScaleTransition(
+                      scale: animation,
+                      child: FadeTransition(
+                        opacity: animation,
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Icon(
+                    isSelected ? activeIcon : icon,
+                    key: ValueKey<bool>(isSelected),
+                    color: isDisabled ? Colors.white.withOpacity(0.6) : Colors.white,
+                    size: isSelected ? 26 : 22,
                   ),
-                );
-              },
-              child: Icon(
-                isSelected ? activeIcon : icon,
-                key: ValueKey<bool>(isSelected),
-                color: Colors.white,
-                size: isSelected ? 26 : 22,
-              ),
+                ),
+
+                // Show lock icon for protected features when not logged in
+                if (isProtected && !_isLoggedIn)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 2,
+                            spreadRadius: 0,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.lock,
+                        size: 10,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 5),
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
               style: TextStyle(
-                color: Colors.white,
+                color: isDisabled ? Colors.white.withOpacity(0.6) : Colors.white,
                 fontSize: 10,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 letterSpacing: isSelected ? 0.5 : 0,
@@ -366,6 +474,7 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
 
   Widget _buildJajananItem(int index, IconData icon, IconData activeIcon, String label) {
     final isSelected = _selectedIndex == index;
+    final isDisabled = !_isLoggedIn; // Jajananku is protected
 
     return GestureDetector(
       onTap: () => _onItemTapped(index),
@@ -382,56 +491,87 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
               builder: (context, child) {
                 return Transform.scale(
                   scale: isSelected ? _bounceAnimation.value : 1.0,
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    transitionBuilder: (child, animation) {
-                      return ScaleTransition(
-                        scale: animation,
-                        child: FadeTransition(
-                          opacity: animation,
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        if (isSelected)
-                          ...List.generate(4, (i) {
-                            return AnimatedBuilder(
-                              animation: _rippleAnimation,
-                              builder: (context, child) {
-                                final double rotation = (i * math.pi / 2) + (_rippleAnimation.value * math.pi);
-                                final double distance = 12 * _rippleAnimation.value * (1 - _rippleAnimation.value) * 4;
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        transitionBuilder: (child, animation) {
+                          return ScaleTransition(
+                            scale: animation,
+                            child: FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            if (isSelected && !isDisabled)
+                              ...List.generate(4, (i) {
+                                return AnimatedBuilder(
+                                  animation: _rippleAnimation,
+                                  builder: (context, child) {
+                                    final double rotation = (i * math.pi / 2) + (_rippleAnimation.value * math.pi);
+                                    final double distance = 12 * _rippleAnimation.value * (1 - _rippleAnimation.value) * 4;
 
-                                return Transform.translate(
-                                  offset: Offset(
-                                    math.cos(rotation) * distance,
-                                    math.sin(rotation) * distance,
-                                  ),
-                                  child: Opacity(
-                                    opacity: (1 - _rippleAnimation.value) * 0.5,
-                                    child: Container(
-                                      width: 4,
-                                      height: 4,
-                                      decoration: const BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
+                                    return Transform.translate(
+                                      offset: Offset(
+                                        math.cos(rotation) * distance,
+                                        math.sin(rotation) * distance,
                                       ),
-                                    ),
-                                  ),
+                                      child: Opacity(
+                                        opacity: (1 - _rippleAnimation.value) * 0.5,
+                                        child: Container(
+                                          width: 4,
+                                          height: 4,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 );
-                              },
-                            );
-                          }),
-                        Icon(
-                          isSelected ? activeIcon : icon,
-                          key: ValueKey<bool>(isSelected),
-                          color: Colors.white,
-                          size: isSelected ? 26 : 22,
+                              }),
+                            Icon(
+                              isSelected ? activeIcon : icon,
+                              key: ValueKey<bool>(isSelected),
+                              color: isDisabled ? Colors.white.withOpacity(0.6) : Colors.white,
+                              size: isSelected ? 26 : 22,
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+
+                      // Show lock icon when not logged in
+                      if (isDisabled)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 2,
+                                  spreadRadius: 0,
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.lock,
+                              size: 10,
+                              color: Colors.green.shade700,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 );
               },
@@ -440,7 +580,7 @@ class _NavBarState extends State<NavBar> with TickerProviderStateMixin {
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
               style: TextStyle(
-                color: Colors.white,
+                color: isDisabled ? Colors.white.withOpacity(0.6) : Colors.white,
                 fontSize: 10,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 letterSpacing: isSelected ? 0.5 : 0,

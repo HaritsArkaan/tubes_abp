@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:lottie/lottie.dart';
 import 'package:glassmorphism/glassmorphism.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:snack_hunt/config.dart';
 import 'models/snack.dart';
 import 'models/review.dart';
@@ -39,6 +40,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
   bool _isLoadingReviews = true;
   bool _isLoadingStats = true;
   String? _errorMessage;
+
+  // User state
+  bool _isGuestMode = true;
 
   @override
   void initState() {
@@ -84,7 +88,39 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
 
     _animationController.forward();
 
-    // We'll fetch data in didChangeDependencies since we need the route arguments
+    // Check if user is in guest mode
+    _checkGuestMode();
+  }
+
+  // Check if user is in guest mode - FIXED
+  Future<void> _checkGuestMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Check for jwt_token directly - this is the primary indicator of login status
+      final token = prefs.getString('jwt_token');
+
+      // Only consider guest mode if explicitly set AND no token exists
+      final isExplicitlyGuest = prefs.getBool('is_guest_mode') ?? false;
+
+      if (mounted) {
+        setState(() {
+          // User is in guest mode if they have no token OR they're explicitly in guest mode
+          _isGuestMode = token == null || isExplicitlyGuest;
+
+          // Debug output to help troubleshoot
+          print('Login status check: token=${token != null}, isExplicitlyGuest=$isExplicitlyGuest, _isGuestMode=$_isGuestMode');
+        });
+      }
+    } catch (e) {
+      print('Error checking guest mode: $e');
+      // Default to guest mode if there's an error
+      if (mounted) {
+        setState(() {
+          _isGuestMode = true;
+        });
+      }
+    }
   }
 
   @override
@@ -200,8 +236,141 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
     super.dispose();
   }
 
+  // Show login prompt dialog
+  void _showLoginPrompt(String feature) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFFF1F8E9),
+                  Color(0xFFDCEDC8),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Icon
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF8BC34A).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Icon(
+                      feature == 'favorite' ? Icons.favorite : Icons.rate_review,
+                      color: const Color(0xFF8BC34A),
+                      size: 36,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Title
+                Text(
+                  'Login Required',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF689F38),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Message
+                Text(
+                  feature == 'favorite'
+                      ? 'You need to login to add this snack to your favorites.'
+                      : 'You need to login to write a review.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[700],
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Login Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context); // Close dialog
+                      Navigator.of(context).pushNamed('/login');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8BC34A),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Login Now',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Cancel Button
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: Text(
+                    'Maybe Later',
+                    style: TextStyle(
+                      color: Colors.grey[700],
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // Show the Add Review dialog
   void _showAddReviewDialog() {
+    // If in guest mode, show login prompt instead
+    if (_isGuestMode) {
+      _showLoginPrompt('review');
+      return;
+    }
+
     double _selectedRating = 0;
     final TextEditingController _reviewController = TextEditingController();
 
@@ -438,13 +607,6 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
     // This is an estimate - adjust if your NavBar has a different height
     final navBarHeight = 80.0;
     final snack = ModalRoute.of(context)!.settings.arguments as Snack;
-
-    // Check if snack is top rated (rating > 4.5 and at least 5 reviews)
-    final bool isTopRated = !_isLoadingStats &&
-        _reviewStatistic != null &&
-        _reviewStatistic!.averageRating > 4.5 &&
-        _reviewStatistic!.reviewCount >= 5;
-
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: PreferredSize(
@@ -517,8 +679,44 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                   ],
                 ),
               ) : null,
-              // Removed heart and share buttons from actions
-              actions: const [], // Empty actions list
+              actions: [
+                // Only show favorite button if not in guest mode
+                if (!_isGuestMode)
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isFavorite = !_isFavorite;
+                      });
+                      if (_isFavorite) {
+                        _heartController.reset();
+                        _heartController.forward();
+                      }
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _showTitle
+                            ? Colors.white.withOpacity(0.3)
+                            : const Color(0xFF8BC34A).withOpacity(0.8),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        _isFavorite ? Icons.favorite : Icons.favorite_border,
+                        color: _isFavorite ? Colors.red : Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+              ],
             );
           },
         ),
@@ -565,7 +763,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                   ),
 
                   // Heart animation when favorited
-                  if (_isFavorite)
+                  if (_isFavorite && !_isGuestMode)
                     Positioned.fill(
                       child: AnimatedBuilder(
                         animation: _heartController,
@@ -698,7 +896,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                           ),
                                           const SizedBox(height: 4),
                                           // Only show Top Rated badge if conditions are met
-                                          if (isTopRated)
+                                          if (_reviewStatistic != null &&
+                                              _reviewStatistic!.averageRating > 4.5 &&
+                                              _reviewStatistic!.reviewCount >= 5)
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                               decoration: BoxDecoration(
@@ -718,37 +918,77 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                       ),
                                     ),
 
-                                    // Favorite Button (on mobile)
+                                    // Favorite Button (on mobile) - Modified for guest mode
                                     GestureDetector(
                                       onTap: () {
-                                        setState(() {
-                                          _isFavorite = !_isFavorite;
-                                        });
+                                        if (_isGuestMode) {
+                                          // Show login prompt for guests
+                                          _showLoginPrompt('favorite');
+                                        } else {
+                                          setState(() {
+                                            _isFavorite = !_isFavorite;
+                                          });
                                         if (_isFavorite) {
-                                          _heartController.reset();
-                                          _heartController.forward();
+                                        _heartController.reset();
+                                        _heartController.forward();
                                         }
+                                      }
                                       },
-                                      child: AnimatedContainer(
-                                        duration: const Duration(milliseconds: 300),
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: _isFavorite ? Colors.red.withOpacity(0.1) : Colors.white,
-                                          shape: BoxShape.circle,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.grey.withOpacity(0.2),
-                                              spreadRadius: 1,
-                                              blurRadius: 3,
-                                              offset: const Offset(0, 1),
+                                      child: Stack(
+                                        children: [
+                                          AnimatedContainer(
+                                            duration: const Duration(milliseconds: 300),
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: _isFavorite && !_isGuestMode
+                                                  ? Colors.red.withOpacity(0.1)
+                                                  : Colors.white,
+                                              shape: BoxShape.circle,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.grey.withOpacity(0.2),
+                                                  spreadRadius: 1,
+                                                  blurRadius: 3,
+                                                  offset: const Offset(0, 1),
+                                                ),
+                                              ],
                                             ),
-                                          ],
-                                        ),
-                                        child: Icon(
-                                          _isFavorite ? Icons.favorite : Icons.favorite_border,
-                                          color: _isFavorite ? Colors.red : const Color(0xFF8BC34A),
-                                          size: 24,
-                                        ),
+                                            child: Icon(
+                                              _isFavorite && !_isGuestMode
+                                                  ? Icons.favorite
+                                                  : Icons.favorite_border,
+                                              color: _isFavorite && !_isGuestMode
+                                                  ? Colors.red
+                                                  : _isGuestMode
+                                                  ? Colors.grey
+                                                  : const Color(0xFF8BC34A),
+                                              size: 24,
+                                            ),
+                                          ),
+
+                                          // Lock icon overlay for guest mode
+                                          if (_isGuestMode)
+                                            Positioned(
+                                              right: 0,
+                                              bottom: 0,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.grey[100],
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: Colors.white,
+                                                    width: 1,
+                                                  ),
+                                                ),
+                                                child: const Icon(
+                                                  Icons.lock,
+                                                  color: Colors.grey,
+                                                  size: 10,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   ],
@@ -920,7 +1160,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                     ),
                                     const SizedBox(width: 12),
 
-                                    // Tags - Updated to use snack.type instead of hardcoded "Food"
+                                    // Tags
                                     Expanded(
                                       child: SingleChildScrollView(
                                         scrollDirection: Axis.horizontal,
@@ -1114,7 +1354,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
 
                                 const SizedBox(height: 24),
 
-                                // Add Review Button with animation
+                                // Add Review Button with animation - Modified for guest mode
                                 TweenAnimationBuilder<double>(
                                   tween: Tween<double>(begin: 0, end: 1),
                                   duration: const Duration(milliseconds: 800),
@@ -1122,58 +1362,88 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                   builder: (context, value, child) {
                                     return Transform.scale(
                                       scale: value,
-                                      child: Container(
-                                        width: double.infinity,
-                                        height: 55,
-                                        decoration: BoxDecoration(
-                                          gradient: const LinearGradient(
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                            colors: [
-                                              Color(0xFF8BC34A),
-                                              Color(0xFF689F38),
-                                            ],
-                                          ),
-                                          borderRadius: BorderRadius.circular(16),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xFF8BC34A).withOpacity(0.3),
-                                              blurRadius: 8,
-                                              spreadRadius: 0,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Material(
-                                          color: Colors.transparent,
-                                          child: InkWell(
-                                            onTap: _showAddReviewDialog,
-                                            borderRadius: BorderRadius.circular(16),
-                                            splashColor: Colors.white.withOpacity(0.1),
-                                            highlightColor: Colors.white.withOpacity(0.1),
-                                            child: const Center(
-                                              child: Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.rate_review,
-                                                    color: Colors.white,
-                                                    size: 24,
-                                                  ),
-                                                  SizedBox(width: 12),
-                                                  Text(
-                                                    'Write a Review',
-                                                    style: TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 18,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
+                                      child: Stack(
+                                        children: [
+                                          Container(
+                                            width: double.infinity,
+                                            height: 55,
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                                colors: _isGuestMode
+                                                    ? [Colors.grey[300]!, Colors.grey[400]!]
+                                                    : [
+                                                  const Color(0xFF8BC34A),
+                                                  const Color(0xFF689F38),
                                                 ],
+                                              ),
+                                              borderRadius: BorderRadius.circular(16),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: _isGuestMode
+                                                      ? Colors.grey.withOpacity(0.3)
+                                                      : const Color(0xFF8BC34A).withOpacity(0.3),
+                                                  blurRadius: 8,
+                                                  spreadRadius: 0,
+                                                  offset: const Offset(0, 4),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Material(
+                                              color: Colors.transparent,
+                                              child: InkWell(
+                                                onTap: _showAddReviewDialog,
+                                                borderRadius: BorderRadius.circular(16),
+                                                splashColor: Colors.white.withOpacity(0.1),
+                                                highlightColor: Colors.white.withOpacity(0.1),
+                                                child: Center(
+                                                  child: Row(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.rate_review,
+                                                        color: Colors.white,
+                                                        size: 24,
+                                                      ),
+                                                      SizedBox(width: 12),
+                                                      Text(
+                                                        'Write a Review',
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 18,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
+
+                                          // Lock icon overlay for guest mode
+                                          if (_isGuestMode)
+                                            Positioned(
+                                              right: 16,
+                                              top: 0,
+                                              bottom: 0,
+                                              child: Center(
+                                                child: Container(
+                                                  padding: const EdgeInsets.all(6),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white.withOpacity(0.9),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.lock,
+                                                    color: Colors.grey,
+                                                    size: 16,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     );
                                   },
@@ -1259,7 +1529,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                       ),
                                       const SizedBox(height: 8),
                                       Text(
-                                        'Be the first to review this snack!',
+                                        _isGuestMode
+                                            ? 'Login to be the first to review this snack!'
+                                            : 'Be the first to review this snack!',
                                         style: TextStyle(
                                           color: Colors.grey[500],
                                           fontSize: 14,
@@ -1282,6 +1554,60 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                     DateTime.now(), // Assuming the API doesn't provide a date
                                   )).toList(),
                                 ),
+
+                                // Guest mode indicator - Only show if in guest mode
+                                if (_isGuestMode)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 24),
+                                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[100],
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.grey[300]!,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.info_outline,
+                                          color: Colors.grey,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            'You are in guest mode. Login to add favorites and write reviews.',
+                                            style: TextStyle(
+                                              color: Colors.grey[700],
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.of(context).pushNamed('/login');
+                                          },
+                                          style: TextButton.styleFrom(
+                                            backgroundColor: const Color(0xFF8BC34A),
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'Login',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
@@ -1297,10 +1623,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
       ),
       // Use extendBody to make the body extend behind the navbar
       extendBody: true,
-      bottomNavigationBar: const NavBar(
-        // Don't set a selectedIndex here since this is a detail page
-        // or you can set it to match the page you came from
-      ),
+      bottomNavigationBar: const NavBar(),
     );
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LandingPage extends StatefulWidget {
   final VoidCallback? onComplete;
@@ -297,6 +298,26 @@ class _LandingPageState extends State<LandingPage> with TickerProviderStateMixin
       _showSecondPhase = true;
     });
     _secondPhaseController.forward();
+  }
+
+  // Clear any existing auth token and set guest mode flag
+  Future<void> _enterGuestMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Clear any existing JWT token
+      await prefs.remove('jwt_token');
+
+      // Set guest mode flag
+      await prefs.setBool('is_guest_mode', true);
+
+      // Navigate to dashboard
+      Navigator.of(context).pushReplacementNamed('/dashboard');
+    } catch (e) {
+      print('Error entering guest mode: $e');
+      // Fallback if there's an error
+      Navigator.of(context).pushReplacementNamed('/dashboard');
+    }
   }
 
   @override
@@ -910,9 +931,7 @@ class _LandingPageState extends State<LandingPage> with TickerProviderStateMixin
                             duration: const Duration(milliseconds: 400),
                             curve: Curves.easeOut,
                             child: TextButton(
-                              onPressed: () {
-                                Navigator.of(context).pushReplacementNamed('/dashboard');
-                              },
+                              onPressed: _enterGuestMode, // Use the new guest mode function
                               style: TextButton.styleFrom(
                                 foregroundColor: Colors.black54,
                                 padding: const EdgeInsets.symmetric(vertical: 12),
