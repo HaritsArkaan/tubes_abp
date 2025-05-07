@@ -201,6 +201,11 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
           _reviews = reviews;
           _isLoadingReviews = false;
         });
+
+        // Fetch user names for each review
+        for (var review in reviews) {
+          _cacheUserName(review.userId.toString());
+        }
       }
     } catch (e) {
       print('Error fetching reviews: $e');
@@ -210,6 +215,25 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
           _isLoadingReviews = false;
         });
       }
+    }
+  }
+
+  // Add this method to cache user names
+  Future<void> _cacheUserName(String userId) async {
+    try {
+      // This is where you would call your user API to get the user details
+      // For example:
+      // final userDetails = await _userApiService.getUserDetails(int.parse(userId));
+      // final userName = userDetails.name;
+
+      // For now, we'll use a placeholder
+      final userName = '$userId';
+
+      // Cache the user name
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('username_$userId', userName);
+    } catch (e) {
+      print('Error caching user name: $e');
     }
   }
 
@@ -545,7 +569,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                   ],
                                 ),
                                 backgroundColor: Color(0xFF8BC34A),
-                                duration: Duration(seconds: 2), // Long duration as we'll dismiss it manually
+                                duration: Duration(seconds: 30), // Long duration as we'll dismiss it manually
                               ),
                             );
 
@@ -558,6 +582,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                               if (userId == null || token == null) {
                                 throw Exception('User not logged in');
                               }
+
+                              // Use the snack object captured before showing the dialog
+                              // No need to get it from ModalRoute again
 
                               final review = Review(
                                 id: 0,
@@ -1620,19 +1647,20 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                     ],
                                   ),
                                 )
-                                    : GridView.count(
+                                    : ListView.separated(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
-                                  crossAxisCount: 2,
-                                  childAspectRatio: 1.5,
-                                  crossAxisSpacing: 16,
-                                  mainAxisSpacing: 16,
-                                  children: _reviews.map((review) => _buildReviewCard(
-                                    review.userId.toString(), // Using userId as name for now
-                                    review.rating.toInt(),
-                                    review.content,
-                                    DateTime.now(), // Assuming the API doesn't provide a date
-                                  )).toList(),
+                                  itemCount: _reviews.length,
+                                  separatorBuilder: (context, index) => const SizedBox(height: 16),
+                                  itemBuilder: (context, index) {
+                                    final review = _reviews[index];
+                                    return _buildReviewCard(
+                                      review.userId.toString(),
+                                      review.rating.toInt(),
+                                      review.content,
+                                      DateTime.now(), // Assuming the API doesn't provide a date
+                                    );
+                                  },
                                 ),
 
                                 // Guest mode indicator - Only show if in guest mode
@@ -1766,9 +1794,20 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
     );
   }
 
-  Widget _buildReviewCard(String name, int rating, String comment, DateTime date) {
+  Widget _buildReviewCard(String userId, int rating, String comment, DateTime date) {
+    // Fetch user name from the API or local storage based on userId
+    // This is a placeholder - in a real app, you would get the actual user name
+    String userName = "User"; // Default name if we can't get the real name
+
+    // Try to get the user name from SharedPreferences or other local storage
+    _getUserName(userId).then((name) {
+      if (name != null && name.isNotEmpty) {
+        userName = name;
+      }
+    });
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -1804,7 +1843,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: _getAvatarColor(name).withOpacity(0.3),
+                      color: _getAvatarColor(userName).withOpacity(0.3),
                       blurRadius: 4,
                       spreadRadius: 0,
                       offset: const Offset(0, 2),
@@ -1812,75 +1851,98 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                   ],
                 ),
                 child: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: _getAvatarColor(name),
+                  radius: 20,
+                  backgroundColor: _getAvatarColor(userName),
                   child: Text(
-                    name[0],
+                    userName.isNotEmpty ? userName[0] : "?",
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
 
-              // Name
+              // Name and date
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'User $name',
+                      userName,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontSize: 16,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       _formatDate(date),
                       style: TextStyle(
                         color: Colors.grey[600],
-                        fontSize: 10,
+                        fontSize: 12,
                       ),
                     ),
                   ],
                 ),
               ),
+
+              // Rating stars
+              Row(
+                children: List.generate(5, (index) {
+                  return Icon(
+                    index < rating ? Icons.star : Icons.star_border,
+                    color: Colors.amber,
+                    size: 16,
+                  );
+                }),
+              ),
             ],
           ),
 
-          const SizedBox(height: 6),
-
-          // Rating stars
-          Row(
-            children: List.generate(5, (index) {
-              return Icon(
-                index < rating ? Icons.star : Icons.star_border,
-                color: Colors.amber,
-                size: 14,
-              );
-            }),
-          ),
-
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          const Divider(),
+          const SizedBox(height: 12),
 
           // Comment
-          Expanded(
-            child: Text(
-              comment,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[700],
-                height: 1.4,
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
+          Text(
+            comment,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[800],
+              height: 1.5,
             ),
           ),
         ],
       ),
     );
+  }
+
+// Add this method to fetch user name from userId
+  Future<String?> _getUserName(String userId) async {
+    try {
+      // First try to get from local cache
+      final prefs = await SharedPreferences.getInstance();
+      String? cachedName = prefs.getString('username_$userId');
+
+      if (cachedName != null && cachedName.isNotEmpty) {
+        return cachedName;
+      }
+
+      // If not in cache, try to fetch from API
+      // This is where you would call your user API to get the user details
+      // For example:
+      // final userDetails = await _userApiService.getUserDetails(int.parse(userId));
+      // return userDetails.name;
+
+      // For now, we'll return a placeholder based on userId
+      return 'User $userId';
+    } catch (e) {
+      print('Error fetching user name: $e');
+      return null;
+    }
   }
 
   Color _getAvatarColor(String name) {
