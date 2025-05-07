@@ -8,9 +8,11 @@ import 'package:glassmorphism/glassmorphism.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:snack_hunt/config.dart';
 import 'package:snack_hunt/services/api_user.dart';
+import 'models/favorite.dart';
 import 'models/snack.dart';
 import 'models/review.dart';
 import 'models/reviewStatistic.dart';
+import 'services/api_favorite.dart';
 import 'services/api_review.dart';
 import 'navbar.dart'; // Import the existing NavBar
 
@@ -32,19 +34,24 @@ class _FoodDetailPageState extends State<FoodDetailPage>
   final ScrollController _scrollController = ScrollController();
   bool _showTitle = false;
 
-  // API service
+  // API services
   final ApiReview _apiReview = ApiReview();
   final ApiUser _apiUser = ApiUser();
+  final ApiFavorite _apiFavorite = ApiFavorite();
 
   // State variables
   List<Review> _reviews = [];
   ReviewStatistic? _reviewStatistic;
   bool _isLoadingReviews = true;
   bool _isLoadingStats = true;
+  bool _isLoadingFavorite = false;
   String? _errorMessage;
+  Favorite? _favorite;
 
   // User state
   bool _isGuestMode = true;
+  int _userId = 0;
+  String _token = '';
 
   @override
   void initState() {
@@ -90,38 +97,202 @@ class _FoodDetailPageState extends State<FoodDetailPage>
 
     _animationController.forward();
 
-    // Check if user is in guest mode
-    _checkGuestMode();
+    // Check if user is in guest mode and load user data
+    _loadUserData();
   }
 
-  // Check if user is in guest mode - FIXED
-  Future<void> _checkGuestMode() async {
+  // Load user data from SharedPreferences
+  Future<void> _loadUserData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
       // Check for jwt_token directly - this is the primary indicator of login status
       final token = prefs.getString('jwt_token');
-
-      // Only consider guest mode if explicitly set AND no token exists
-      // final isExplicitlyGuest = prefs.getBool('is_guest_mode') ?? false;
+      final userId = prefs.getInt('user_id');
 
       if (mounted) {
         setState(() {
-          // User is in guest mode if they have no token OR they're explicitly in guest mode
+          // User is in guest mode if they have no token
           _isGuestMode = token == null;
+          _token = token ?? '';
+          _userId = userId ?? 0;
 
           // Debug output to help troubleshoot
           print(
-              'Login status check: token=${token != null}, _isGuestMode=$_isGuestMode');
+              'Login status check: token=${token != null}, userId=$userId, _isGuestMode=$_isGuestMode');
         });
+
+        // If user is logged in, check if this snack is in their favorites
+        if (!_isGuestMode && _userId > 0) {
+          final snack = ModalRoute.of(context)?.settings.arguments as Snack?;
+          if (snack != null) {
+            _checkFavoriteStatus(snack.id);
+          }
+        }
       }
     } catch (e) {
-      print('Error checking guest mode: $e');
+      print('Error loading user data: $e');
       // Default to guest mode if there's an error
       if (mounted) {
         setState(() {
           _isGuestMode = true;
         });
+      }
+    }
+  }
+
+  // Check if the current snack is in user's favorites
+  Future<void> _checkFavoriteStatus(int snackId) async {
+    if (_isGuestMode || _userId == 0 || _token.isEmpty) return;
+
+    try {
+      setState(() {
+        _isLoadingFavorite = true;
+      });
+
+      // Get all favorites for the user
+      final favorites =
+          await _apiFavorite.getFavoritesByUserId(_userId, _token);
+
+      // Check if this snack is in favorites
+      final favorite = favorites.firstWhere(
+        (fav) => fav.snackId == snackId,
+        orElse: () => Favorite(id: -1, userId: _userId, snackId: snackId),
+      );
+
+      if (mounted) {
+        setState(() {
+          _isFavorite = favorite.id != -1;
+          _favorite = favorite.id != -1 ? favorite : null;
+          _isLoadingFavorite = false;
+        });
+      }
+    } catch (e) {
+      print('Error checking favorite status: $e');
+      if (mounted) {
+        setState(() {
+          _isFavorite = false;
+          _isLoadingFavorite = false;
+        });
+      }
+    }
+  }
+
+  // Add to favorites
+  Future<void> _addToFavorites(int snackId) async {
+    if (_isGuestMode || _userId == 0 || _token.isEmpty) return;
+
+    try {
+      setState(() {
+        _isLoadingFavorite = true;
+      });
+
+      // Call API to add favorite
+      final favorite = await _apiFavorite.addFavorite(_userId, snackId, _token);
+
+      if (mounted) {
+        setState(() {
+          _isFavorite = true;
+          _favorite = favorite;
+          _isLoadingFavorite = false;
+        });
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Added to favorites'),
+            backgroundColor: Color(0xFF8BC34A),
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Trigger heart animation
+        _heartController.reset();
+        _heartController.forward();
+      }
+    } catch (e) {
+      print('Error adding to favorites: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingFavorite = false;
+        });
+
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add to favorites: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  // Remove from favorites
+  Future<void> _removeFromFavorites() async {
+    if (_isGuestMode || _userId == 0 || _token.isEmpty || _favorite == null)
+      return;
+
+    try {
+      setState(() {
+        _isLoadingFavorite = true;
+      });
+
+      // Call API to remove favorite
+      await _apiFavorite.deleteFavorite(_favorite!.id, _token);
+
+      if (mounted) {
+        setState(() {
+          _isFavorite = false;
+          _favorite = null;
+          _isLoadingFavorite = false;
+        });
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Removed from favorites'),
+            backgroundColor: Color(0xFF8BC34A),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error removing from favorites: $e');
+      if (mounted) {
+        setState(() {
+          _isFavorite = false;
+          _favorite = null;
+          _isLoadingFavorite = false;
+        });
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Removed from favorites'),
+            backgroundColor: Color(0xFF8BC34A),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  // Toggle favorite status
+  Future<void> _toggleFavorite() async {
+    if (_isGuestMode) {
+      // Show login prompt for guests
+      _showLoginPrompt('favorite');
+      return;
+    }
+
+    if (_isFavorite) {
+      await _removeFromFavorites();
+    } else {
+      final snack = ModalRoute.of(context)?.settings.arguments as Snack?;
+      if (snack != null) {
+        await _addToFavorites(snack.id);
       }
     }
   }
@@ -137,6 +308,11 @@ class _FoodDetailPageState extends State<FoodDetailPage>
       // Fetch review statistics and reviews
       _fetchReviewStatistics(snack.id);
       _fetchReviews(snack.id);
+
+      // Check favorite status if user is logged in
+      if (!_isGuestMode && _userId > 0) {
+        _checkFavoriteStatus(snack.id);
+      }
     }
   }
 
@@ -511,7 +687,8 @@ class _FoodDetailPageState extends State<FoodDetailPage>
                     // Review Text
                     const Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('Your Review',
+                      child: Text(
+                        'Your Review',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -558,14 +735,17 @@ class _FoodDetailPageState extends State<FoodDetailPage>
                       height: 50,
                       child: ElevatedButton(
                         onPressed: () async {
-                          if (_selectedRating > 0 && _reviewController.text.isNotEmpty) {
+                          if (_selectedRating > 0 &&
+                              _reviewController.text.isNotEmpty) {
                             // Show loading indicator
                             Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Row(
                                   children: [
-                                    SizedBox(height: 20, width: 20,
+                                    SizedBox(
+                                      height: 20,
+                                      width: 20,
                                       child: CircularProgressIndicator(
                                         color: Colors.white,
                                         strokeWidth: 2,
@@ -576,7 +756,9 @@ class _FoodDetailPageState extends State<FoodDetailPage>
                                   ],
                                 ),
                                 backgroundColor: Color(0xFF8BC34A),
-                                duration: Duration(seconds: 2), // Long duration as we'll dismiss it manually
+                                duration: Duration(
+                                    seconds:
+                                        2), // Long duration as we'll dismiss it manually
                               ),
                             );
 
@@ -809,41 +991,43 @@ class _FoodDetailPageState extends State<FoodDetailPage>
                     )
                   : null,
               actions: [
-                // Only show favorite button if not in guest mode
-                if (!_isGuestMode)
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isFavorite = !_isFavorite;
-                      });
-                      if (_isFavorite) {
-                        _heartController.reset();
-                        _heartController.forward();
-                      }
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.all(8),
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: _showTitle
-                            ? Colors.white.withOpacity(0.3)
-                            : const Color(0xFF8BC34A).withOpacity(0.8),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 4,
-                            spreadRadius: 1,
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        _isFavorite ? Icons.favorite : Icons.favorite_border,
-                        color: _isFavorite ? Colors.red : Colors.white,
-                        size: 20,
-                      ),
+                // Favorite button
+                GestureDetector(
+                  onTap: _isLoadingFavorite ? null : _toggleFavorite,
+                  child: Container(
+                    margin: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: _showTitle
+                          ? Colors.white.withOpacity(0.3)
+                          : const Color(0xFF8BC34A).withOpacity(0.8),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 4,
+                          spreadRadius: 1,
+                        ),
+                      ],
                     ),
+                    child: _isLoadingFavorite
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Icon(
+                            _isFavorite
+                                ? Icons.favorite
+                                : Icons.favorite_border,
+                            color: _isFavorite ? Colors.red : Colors.white,
+                            size: 20,
+                          ),
                   ),
+                ),
                 const SizedBox(width: 8),
               ],
             );
@@ -1060,20 +1244,9 @@ class _FoodDetailPageState extends State<FoodDetailPage>
 
                                     // Favorite Button (on mobile) - Modified for guest mode
                                     GestureDetector(
-                                      onTap: () {
-                                        if (_isGuestMode) {
-                                          // Show login prompt for guests
-                                          _showLoginPrompt('favorite');
-                                        } else {
-                                          setState(() {
-                                            _isFavorite = !_isFavorite;
-                                          });
-                                          if (_isFavorite) {
-                                            _heartController.reset();
-                                            _heartController.forward();
-                                          }
-                                        }
-                                      },
+                                      onTap: _isLoadingFavorite
+                                          ? null
+                                          : _toggleFavorite,
                                       child: Stack(
                                         children: [
                                           AnimatedContainer(
@@ -1096,18 +1269,28 @@ class _FoodDetailPageState extends State<FoodDetailPage>
                                                 ),
                                               ],
                                             ),
-                                            child: Icon(
-                                              _isFavorite && !_isGuestMode
-                                                  ? Icons.favorite
-                                                  : Icons.favorite_border,
-                                              color: _isFavorite &&
-                                                      !_isGuestMode
-                                                  ? Colors.red
-                                                  : _isGuestMode
-                                                      ? Colors.grey
-                                                      : const Color(0xFF8BC34A),
-                                              size: 24,
-                                            ),
+                                            child: _isLoadingFavorite
+                                                ? const SizedBox(
+                                                    width: 24,
+                                                    height: 24,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      color: Color(0xFF8BC34A),
+                                                      strokeWidth: 2,
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    _isFavorite && !_isGuestMode
+                                                        ? Icons.favorite
+                                                        : Icons.favorite_border,
+                                                    color: _isFavorite &&
+                                                            !_isGuestMode
+                                                        ? Colors.red
+                                                        : _isGuestMode
+                                                            ? Colors.grey
+                                                            : const Color(0xFF8BC34A),
+                                                    size: 24,
+                                                  ),
                                           ),
 
                                           // Lock icon overlay for guest mode

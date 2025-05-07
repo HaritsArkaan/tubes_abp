@@ -623,7 +623,7 @@ class _FavoritePageState extends State<FavoritePage> {
               ),
               const SizedBox(width: 2),
               Text(
-                '$rating ($reviewCount)',
+                '${rating.toStringAsFixed(1)} ($reviewCount)',
                 style: GoogleFonts.poppins(
                   fontSize: 11,
                   color: Colors.grey[600],
