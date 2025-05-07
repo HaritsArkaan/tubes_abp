@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:math' as math;
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
@@ -8,6 +7,7 @@ import 'package:lottie/lottie.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:snack_hunt/config.dart';
+import 'package:snack_hunt/services/api_user.dart';
 import 'models/snack.dart';
 import 'models/review.dart';
 import 'models/reviewStatistic.dart';
@@ -21,7 +21,8 @@ class FoodDetailPage extends StatefulWidget {
   State<FoodDetailPage> createState() => _FoodDetailPageState();
 }
 
-class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStateMixin {
+class _FoodDetailPageState extends State<FoodDetailPage>
+    with TickerProviderStateMixin {
   late AnimationController _animationController;
   late AnimationController _heartController;
   late AnimationController _scrollAnimController;
@@ -33,6 +34,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
 
   // API service
   final ApiReview _apiReview = ApiReview();
+  final ApiUser _apiUser = ApiUser();
 
   // State variables
   List<Review> _reviews = [];
@@ -109,7 +111,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
           _isGuestMode = token == null;
 
           // Debug output to help troubleshoot
-          print('Login status check: token=${token != null}, _isGuestMode=$_isGuestMode');
+          print(
+              'Login status check: token=${token != null}, _isGuestMode=$_isGuestMode');
         });
       }
     } catch (e) {
@@ -156,7 +159,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
             _isLoadingStats = false;
           });
         }
-      } else if (response is List && response.isNotEmpty && response[0] is Map<String, dynamic>) {
+      } else if (response is List &&
+          response.isNotEmpty &&
+          response[0] is Map<String, dynamic>) {
         if (mounted) {
           setState(() {
             _reviewStatistic = ReviewStatistic.fromJson(response[0]);
@@ -167,7 +172,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
         // Handle unexpected response format
         if (mounted) {
           setState(() {
-            _reviewStatistic = ReviewStatistic(reviewCount: 0, averageRating: 0.0);
+            _reviewStatistic =
+                ReviewStatistic(reviewCount: 0, averageRating: 0.0);
             _isLoadingStats = false;
           });
         }
@@ -178,7 +184,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
         setState(() {
           _errorMessage = 'Failed to load review statistics';
           _isLoadingStats = false;
-          _reviewStatistic = ReviewStatistic(reviewCount: 0, averageRating: 0.0);
+          _reviewStatistic =
+              ReviewStatistic(reviewCount: 0, averageRating: 0.0);
         });
       }
     }
@@ -304,7 +311,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                   ),
                   child: Center(
                     child: Icon(
-                      feature == 'favorite' ? Icons.favorite : Icons.rate_review,
+                      feature == 'favorite'
+                          ? Icons.favorite
+                          : Icons.rate_review,
                       color: const Color(0xFF8BC34A),
                       size: 36,
                     ),
@@ -484,7 +493,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                         itemCount: 5,
                         itemSize: 40,
                         unratedColor: Colors.amber.withOpacity(0.3),
-                        itemPadding: const EdgeInsets.symmetric(horizontal: 2.0),
+                        itemPadding:
+                            const EdgeInsets.symmetric(horizontal: 2.0),
                         itemBuilder: (context, _) => const Icon(
                           Icons.star_rounded,
                           color: Colors.amber,
@@ -501,8 +511,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                     // Review Text
                     const Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Your Review',
+                      child: Text('Your Review',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -556,9 +565,7 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                               const SnackBar(
                                 content: Row(
                                   children: [
-                                    SizedBox(
-                                      height: 20,
-                                      width: 20,
+                                    SizedBox(height: 20, width: 20,
                                       child: CircularProgressIndicator(
                                         color: Colors.white,
                                         strokeWidth: 2,
@@ -569,13 +576,14 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                   ],
                                 ),
                                 backgroundColor: Color(0xFF8BC34A),
-                                duration: Duration(seconds: 30), // Long duration as we'll dismiss it manually
+                                duration: Duration(seconds: 2), // Long duration as we'll dismiss it manually
                               ),
                             );
 
                             try {
                               // Get the current user ID from SharedPreferences
-                              final prefs = await SharedPreferences.getInstance();
+                              final prefs =
+                                  await SharedPreferences.getInstance();
                               final userId = prefs.getInt('user_id');
                               final token = prefs.getString('jwt_token');
 
@@ -598,14 +606,16 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                               await _apiReview.createReview(review, token);
 
                               // Dismiss the loading snackbar
-                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context)
+                                  .hideCurrentSnackBar();
 
                               // Show success message
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: const Row(
                                     children: [
-                                      Icon(Icons.check_circle, color: Colors.white),
+                                      Icon(Icons.check_circle,
+                                          color: Colors.white),
                                       SizedBox(width: 12),
                                       Text('Review added successfully!'),
                                     ],
@@ -619,9 +629,11 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                 ),
                               );
 
-                              // Refresh the reviews and statistics
+                              // Refresh the page
                               if (mounted) {
-                                final snack = ModalRoute.of(context)?.settings.arguments as Snack?;
+                                final snack = ModalRoute.of(context)
+                                    ?.settings
+                                    .arguments as Snack?;
                                 if (snack != null) {
                                   _fetchReviewStatistics(snack.id);
                                   _fetchReviews(snack.id);
@@ -629,16 +641,20 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                               }
                             } catch (e) {
                               // Dismiss the loading snackbar
-                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context)
+                                  .hideCurrentSnackBar();
 
                               // Show error message
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Row(
                                     children: [
-                                      const Icon(Icons.error, color: Colors.white),
+                                      const Icon(Icons.error,
+                                          color: Colors.white),
                                       const SizedBox(width: 12),
-                                      Expanded(child: Text('Failed to add review: ${e.toString()}')),
+                                      Expanded(
+                                          child: Text(
+                                              'Failed to add review: ${e.toString()}')),
                                     ],
                                   ),
                                   backgroundColor: Colors.red,
@@ -649,7 +665,9 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                   margin: const EdgeInsets.all(12),
                                 ),
                               );
-                              final snack = ModalRoute.of(context)?.settings.arguments as Snack?;
+                              final snack = ModalRoute.of(context)
+                                  ?.settings
+                                  .arguments as Snack?;
                               print('Error adding review: $e');
                             }
                           } else {
@@ -724,30 +742,32 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
             return AppBar(
               backgroundColor: Colors.transparent,
               elevation: 0,
-              flexibleSpace: _showTitle ? GlassmorphicContainer(
-                width: MediaQuery.of(context).size.width,
-                height: 56 + MediaQuery.of(context).padding.top,
-                borderRadius: 0,
-                blur: 10,
-                alignment: Alignment.bottomCenter,
-                border: 0,
-                linearGradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white.withOpacity(0.2),
-                    Colors.white.withOpacity(0.2),
-                  ],
-                ),
-                borderGradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white.withOpacity(0.1),
-                    Colors.white.withOpacity(0.1),
-                  ],
-                ),
-              ) : null,
+              flexibleSpace: _showTitle
+                  ? GlassmorphicContainer(
+                      width: MediaQuery.of(context).size.width,
+                      height: 56 + MediaQuery.of(context).padding.top,
+                      borderRadius: 0,
+                      blur: 10,
+                      alignment: Alignment.bottomCenter,
+                      border: 0,
+                      linearGradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.white.withOpacity(0.2),
+                          Colors.white.withOpacity(0.2),
+                        ],
+                      ),
+                      borderGradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.white.withOpacity(0.1),
+                          Colors.white.withOpacity(0.1),
+                        ],
+                      ),
+                    )
+                  : null,
               leading: GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: Container(
@@ -772,20 +792,22 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                   ),
                 ),
               ),
-              title: _showTitle ? Text(
-                snack.name,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(
-                      offset: Offset(0, 1),
-                      blurRadius: 3.0,
-                      color: Color.fromARGB(150, 0, 0, 0),
-                    ),
-                  ],
-                ),
-              ) : null,
+              title: _showTitle
+                  ? Text(
+                      snack.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        shadows: [
+                          Shadow(
+                            offset: Offset(0, 1),
+                            blurRadius: 3.0,
+                            color: Color.fromARGB(150, 0, 0, 0),
+                          ),
+                        ],
+                      ),
+                    )
+                  : null,
               actions: [
                 // Only show favorite button if not in guest mode
                 if (!_isGuestMode)
@@ -851,7 +873,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                         color: Colors.white,
                       ),
                     ),
-                    errorWidget: (context, url, error) => const Icon(Icons.error),
+                    errorWidget: (context, url, error) =>
+                        const Icon(Icons.error),
                   ),
 
                   // Gradient overlay
@@ -877,17 +900,18 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                         builder: (context, child) {
                           return _heartController.value > 0
                               ? Opacity(
-                            opacity: _heartController.value < 0.5
-                                ? _heartController.value * 2
-                                : 1 - ((_heartController.value - 0.5) * 2),
-                            child: Center(
-                              child: Icon(
-                                Icons.favorite,
-                                color: Colors.red.withOpacity(0.8),
-                                size: 100 + (_heartController.value * 50),
-                              ),
-                            ),
-                          )
+                                  opacity: _heartController.value < 0.5
+                                      ? _heartController.value * 2
+                                      : 1 -
+                                          ((_heartController.value - 0.5) * 2),
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.favorite,
+                                      color: Colors.red.withOpacity(0.8),
+                                      size: 100 + (_heartController.value * 50),
+                                    ),
+                                  ),
+                                )
                               : const SizedBox.shrink();
                         },
                       ),
@@ -968,7 +992,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                         borderRadius: BorderRadius.circular(12),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.orange.withOpacity(0.4),
+                                            color:
+                                                Colors.orange.withOpacity(0.4),
                                             blurRadius: 8,
                                             spreadRadius: 1,
                                             offset: const Offset(0, 4),
@@ -992,7 +1017,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                     // Title
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             snack.name,
@@ -1004,13 +1030,20 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                           const SizedBox(height: 4),
                                           // Only show Top Rated badge if conditions are met
                                           if (_reviewStatistic != null &&
-                                              _reviewStatistic!.averageRating > 4.5 &&
-                                              _reviewStatistic!.reviewCount >= 5)
+                                              _reviewStatistic!.averageRating >
+                                                  4.5 &&
+                                              _reviewStatistic!.reviewCount >=
+                                                  5)
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 3),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFF8BC34A).withOpacity(0.1),
-                                                borderRadius: BorderRadius.circular(4),
+                                                color: const Color(0xFF8BC34A)
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
                                               ),
                                               child: const Text(
                                                 'Top Rated',
@@ -1044,16 +1077,19 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                       child: Stack(
                                         children: [
                                           AnimatedContainer(
-                                            duration: const Duration(milliseconds: 300),
+                                            duration: const Duration(
+                                                milliseconds: 300),
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
-                                              color: _isFavorite && !_isGuestMode
+                                              color: _isFavorite &&
+                                                      !_isGuestMode
                                                   ? Colors.red.withOpacity(0.1)
                                                   : Colors.white,
                                               shape: BoxShape.circle,
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: Colors.grey.withOpacity(0.2),
+                                                  color: Colors.grey
+                                                      .withOpacity(0.2),
                                                   spreadRadius: 1,
                                                   blurRadius: 3,
                                                   offset: const Offset(0, 1),
@@ -1064,11 +1100,12 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                               _isFavorite && !_isGuestMode
                                                   ? Icons.favorite
                                                   : Icons.favorite_border,
-                                              color: _isFavorite && !_isGuestMode
+                                              color: _isFavorite &&
+                                                      !_isGuestMode
                                                   ? Colors.red
                                                   : _isGuestMode
-                                                  ? Colors.grey
-                                                  : const Color(0xFF8BC34A),
+                                                      ? Colors.grey
+                                                      : const Color(0xFF8BC34A),
                                               size: 24,
                                             ),
                                           ),
@@ -1079,7 +1116,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                               right: 0,
                                               bottom: 0,
                                               child: Container(
-                                                padding: const EdgeInsets.all(4),
+                                                padding:
+                                                    const EdgeInsets.all(4),
                                                 decoration: BoxDecoration(
                                                   color: Colors.grey[100],
                                                   shape: BoxShape.circle,
@@ -1105,7 +1143,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
 
                                 // Rating and Reviews Count
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
                                       begin: Alignment.topLeft,
@@ -1131,79 +1170,94 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                   ),
                                   child: _isLoadingStats
                                       ? const Center(
-                                    child: SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Color(0xFF8BC34A),
-                                      ),
-                                    ),
-                                  )
-                                      : Row(
-                                    children: [
-                                      RatingBar.builder(
-                                        initialRating: _reviewStatistic?.averageRating ?? 0,
-                                        minRating: 0,
-                                        direction: Axis.horizontal,
-                                        allowHalfRating: true,
-                                        itemCount: 5,
-                                        itemSize: 20,
-                                        ignoreGestures: true,
-                                        itemPadding: const EdgeInsets.symmetric(horizontal: 1.0),
-                                        itemBuilder: (context, _) => const Icon(
-                                          Icons.star,
-                                          color: Colors.amber,
-                                        ),
-                                        onRatingUpdate: (rating) {},
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Text(
-                                        '${_reviewStatistic?.averageRating.toStringAsFixed(1) ?? "0.0"}/5',
-                                        style: TextStyle(
-                                          color: Colors.grey[800],
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '(${_reviewStatistic?.reviewCount ?? 0} reviews)',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      const Spacer(),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF8BC34A).withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(20),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.thumb_up_alt,
-                                              size: 14,
+                                          child: SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
                                               color: Color(0xFF8BC34A),
                                             ),
-                                            const SizedBox(width: 4),
+                                          ),
+                                        )
+                                      : Row(
+                                          children: [
+                                            RatingBar.builder(
+                                              initialRating: _reviewStatistic
+                                                      ?.averageRating ??
+                                                  0,
+                                              minRating: 0,
+                                              direction: Axis.horizontal,
+                                              allowHalfRating: true,
+                                              itemCount: 5,
+                                              itemSize: 20,
+                                              ignoreGestures: true,
+                                              itemPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 1.0),
+                                              itemBuilder: (context, _) =>
+                                                  const Icon(
+                                                Icons.star,
+                                                color: Colors.amber,
+                                              ),
+                                              onRatingUpdate: (rating) {},
+                                            ),
+                                            const SizedBox(width: 10),
                                             Text(
-                                              _reviewStatistic?.averageRating != null && _reviewStatistic!.averageRating > 0
-                                                  ? '${((_reviewStatistic!.averageRating / 5) * 100).toInt()}%'
-                                                  : '0%',
+                                              '${_reviewStatistic?.averageRating.toStringAsFixed(1) ?? "0.0"}/5',
                                               style: TextStyle(
                                                 color: Colors.grey[800],
                                                 fontWeight: FontWeight.bold,
-                                                fontSize: 12,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '(${_reviewStatistic?.reviewCount ?? 0} reviews)',
+                                              style: TextStyle(
+                                                color: Colors.grey[600],
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            const Spacer(),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF8BC34A)
+                                                    .withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons.thumb_up_alt,
+                                                    size: 14,
+                                                    color: Color(0xFF8BC34A),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    _reviewStatistic?.averageRating !=
+                                                                null &&
+                                                            _reviewStatistic!
+                                                                    .averageRating >
+                                                                0
+                                                        ? '${((_reviewStatistic!.averageRating / 5) * 100).toInt()}%'
+                                                        : '0%',
+                                                    style: TextStyle(
+                                                      color: Colors.grey[800],
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ],
                                         ),
-                                      ),
-                                    ],
-                                  ),
                                 ),
 
                                 const SizedBox(height: 20),
@@ -1214,7 +1268,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                     // Price with animated background
                                     TweenAnimationBuilder<double>(
                                       tween: Tween<double>(begin: 0, end: 1),
-                                      duration: const Duration(milliseconds: 1000),
+                                      duration:
+                                          const Duration(milliseconds: 1000),
                                       curve: Curves.elasticOut,
                                       builder: (context, value, child) {
                                         return Transform.scale(
@@ -1233,10 +1288,12 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                                   Color(0xFF689F38),
                                                 ],
                                               ),
-                                              borderRadius: BorderRadius.circular(20),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: const Color(0xFF8BC34A).withOpacity(0.3),
+                                                  color: const Color(0xFF8BC34A)
+                                                      .withOpacity(0.3),
                                                   blurRadius: 8,
                                                   spreadRadius: 0,
                                                   offset: const Offset(0, 4),
@@ -1274,7 +1331,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                         physics: const BouncingScrollPhysics(),
                                         child: Row(
                                           children: [
-                                            _buildTag(snack.type, _getIconForType(snack.type)),
+                                            _buildTag(snack.type,
+                                                _getIconForType(snack.type)),
                                           ],
                                         ),
                                       ),
@@ -1329,7 +1387,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                               shape: BoxShape.circle,
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: const Color(0xFF8BC34A).withOpacity(0.3),
+                                                  color: const Color(0xFF8BC34A)
+                                                      .withOpacity(0.3),
                                                   blurRadius: 8,
                                                   spreadRadius: 0,
                                                   offset: const Offset(0, 2),
@@ -1345,7 +1404,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                           const SizedBox(width: 16),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 const Text(
                                                   'Location',
@@ -1368,7 +1428,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                           Container(
                                             padding: const EdgeInsets.all(8),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFF8BC34A).withOpacity(0.1),
+                                              color: const Color(0xFF8BC34A)
+                                                  .withOpacity(0.1),
                                               shape: BoxShape.circle,
                                             ),
                                             child: const Icon(
@@ -1381,7 +1442,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                       ),
 
                                       const Padding(
-                                        padding: EdgeInsets.symmetric(vertical: 16),
+                                        padding:
+                                            EdgeInsets.symmetric(vertical: 16),
                                         child: Divider(
                                           color: Color(0xFFE0E0E0),
                                           thickness: 1,
@@ -1405,7 +1467,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                               shape: BoxShape.circle,
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: const Color(0xFF8BC34A).withOpacity(0.3),
+                                                  color: const Color(0xFF8BC34A)
+                                                      .withOpacity(0.3),
                                                   blurRadius: 8,
                                                   spreadRadius: 0,
                                                   offset: const Offset(0, 2),
@@ -1421,7 +1484,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                           const SizedBox(width: 16),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 const Text(
                                                   'Phone',
@@ -1444,7 +1508,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                           Container(
                                             padding: const EdgeInsets.all(8),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFF8BC34A).withOpacity(0.1),
+                                              color: const Color(0xFF8BC34A)
+                                                  .withOpacity(0.1),
                                               shape: BoxShape.circle,
                                             ),
                                             child: const Icon(
@@ -1479,18 +1544,24 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                                 begin: Alignment.topLeft,
                                                 end: Alignment.bottomRight,
                                                 colors: _isGuestMode
-                                                    ? [Colors.grey[300]!, Colors.grey[400]!]
+                                                    ? [
+                                                        Colors.grey[300]!,
+                                                        Colors.grey[400]!
+                                                      ]
                                                     : [
-                                                  const Color(0xFF8BC34A),
-                                                  const Color(0xFF689F38),
-                                                ],
+                                                        const Color(0xFF8BC34A),
+                                                        const Color(0xFF689F38),
+                                                      ],
                                               ),
-                                              borderRadius: BorderRadius.circular(16),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
                                               boxShadow: [
                                                 BoxShadow(
                                                   color: _isGuestMode
-                                                      ? Colors.grey.withOpacity(0.3)
-                                                      : const Color(0xFF8BC34A).withOpacity(0.3),
+                                                      ? Colors.grey
+                                                          .withOpacity(0.3)
+                                                      : const Color(0xFF8BC34A)
+                                                          .withOpacity(0.3),
                                                   blurRadius: 8,
                                                   spreadRadius: 0,
                                                   offset: const Offset(0, 4),
@@ -1501,12 +1572,17 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                               color: Colors.transparent,
                                               child: InkWell(
                                                 onTap: _showAddReviewDialog,
-                                                borderRadius: BorderRadius.circular(16),
-                                                splashColor: Colors.white.withOpacity(0.1),
-                                                highlightColor: Colors.white.withOpacity(0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                splashColor: Colors.white
+                                                    .withOpacity(0.1),
+                                                highlightColor: Colors.white
+                                                    .withOpacity(0.1),
                                                 child: Center(
                                                   child: Row(
-                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
                                                     children: [
                                                       Icon(
                                                         Icons.rate_review,
@@ -1519,7 +1595,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                                         style: TextStyle(
                                                           color: Colors.white,
                                                           fontSize: 18,
-                                                          fontWeight: FontWeight.bold,
+                                                          fontWeight:
+                                                              FontWeight.bold,
                                                         ),
                                                       ),
                                                     ],
@@ -1537,9 +1614,11 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                               bottom: 0,
                                               child: Center(
                                                 child: Container(
-                                                  padding: const EdgeInsets.all(6),
+                                                  padding:
+                                                      const EdgeInsets.all(6),
                                                   decoration: BoxDecoration(
-                                                    color: Colors.white.withOpacity(0.9),
+                                                    color: Colors.white
+                                                        .withOpacity(0.9),
                                                     shape: BoxShape.circle,
                                                   ),
                                                   child: const Icon(
@@ -1560,7 +1639,8 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
 
                                 // Reviews Header
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     const Text(
                                       'Reviews',
@@ -1570,12 +1650,15 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                       ),
                                     ),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF8BC34A).withOpacity(0.1),
+                                        color: const Color(0xFF8BC34A)
+                                            .withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(20),
                                         border: Border.all(
-                                          color: const Color(0xFF8BC34A).withOpacity(0.3),
+                                          color: const Color(0xFF8BC34A)
+                                              .withOpacity(0.3),
                                           width: 1,
                                         ),
                                       ),
@@ -1595,79 +1678,84 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                 // Reviews
                                 _isLoadingReviews
                                     ? Center(
-                                  child: SizedBox(
-                                    height: 100,
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        const CircularProgressIndicator(
-                                          color: Color(0xFF8BC34A),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          'Loading reviews...',
-                                          style: TextStyle(
-                                            color: Colors.grey[600],
-                                            fontSize: 14,
+                                        child: SizedBox(
+                                          height: 100,
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              const CircularProgressIndicator(
+                                                color: Color(0xFF8BC34A),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Text(
+                                                'Loading reviews...',
+                                                style: TextStyle(
+                                                  color: Colors.grey[600],
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                )
+                                      )
                                     : _reviews.isEmpty
-                                    ? Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(
-                                        Icons.rate_review_outlined,
-                                        color: Color(0xFF8BC34A),
-                                        size: 48,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        'No reviews yet',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        _isGuestMode
-                                            ? 'Login to be the first to review this snack!'
-                                            : 'Be the first to review this snack!',
-                                        style: TextStyle(
-                                          color: Colors.grey[500],
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                )
-                                    : ListView.separated(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  itemCount: _reviews.length,
-                                  separatorBuilder: (context, index) => const SizedBox(height: 16),
-                                  itemBuilder: (context, index) {
-                                    final review = _reviews[index];
-                                    return _buildReviewCard(
-                                      review.userId.toString(),
-                                      review.rating.toInt(),
-                                      review.content,
-                                      DateTime.now(), // Assuming the API doesn't provide a date
-                                    );
-                                  },
-                                ),
+                                        ? Center(
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                const Icon(
+                                                  Icons.rate_review_outlined,
+                                                  color: Color(0xFF8BC34A),
+                                                  size: 48,
+                                                ),
+                                                const SizedBox(height: 16),
+                                                Text(
+                                                  'No reviews yet',
+                                                  style: TextStyle(
+                                                    color: Colors.grey[600],
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  _isGuestMode
+                                                      ? 'Login to be the first to review this snack!'
+                                                      : 'Be the first to review this snack!',
+                                                  style: TextStyle(
+                                                    color: Colors.grey[500],
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        : ListView.separated(
+                                            shrinkWrap: true,
+                                            physics:
+                                                const NeverScrollableScrollPhysics(),
+                                            itemCount: _reviews.length,
+                                            separatorBuilder:
+                                                (context, index) =>
+                                                    const SizedBox(height: 16),
+                                            itemBuilder: (context, index) {
+                                              final review = _reviews[index];
+                                              return _buildReviewCard(
+                                                review.userId.toString(),
+                                                review.rating.toInt(),
+                                                review.content,
+                                              );
+                                            },
+                                          ),
 
                                 // Guest mode indicator - Only show if in guest mode
                                 if (_isGuestMode)
                                   Container(
                                     margin: const EdgeInsets.only(top: 24),
-                                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12, horizontal: 16),
                                     decoration: BoxDecoration(
                                       color: Colors.grey[100],
                                       borderRadius: BorderRadius.circular(12),
@@ -1696,13 +1784,17 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
                                         const SizedBox(width: 8),
                                         TextButton(
                                           onPressed: () {
-                                            Navigator.of(context).pushNamed('/login');
+                                            Navigator.of(context)
+                                                .pushNamed('/login');
                                           },
                                           style: TextButton.styleFrom(
-                                            backgroundColor: const Color(0xFF8BC34A),
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            backgroundColor:
+                                                const Color(0xFF8BC34A),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 8),
                                             shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(8),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
                                             ),
                                           ),
                                           child: const Text(
@@ -1794,153 +1886,148 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
     );
   }
 
-  Widget _buildReviewCard(String userId, int rating, String comment, DateTime date) {
-    // Fetch user name from the API or local storage based on userId
-    // This is a placeholder - in a real app, you would get the actual user name
-    String userName = "User"; // Default name if we can't get the real name
+  Widget _buildReviewCard(String userId, int rating, String comment) {
+    return FutureBuilder<String?>(
+      future: _getUserName(userId),
+      builder: (context, snapshot) {
+        // Use the username from the API if available, otherwise use a default
+        final String userName = snapshot.data ?? "User $userId";
 
-    // Try to get the user name from SharedPreferences or other local storage
-    _getUserName(userId).then((name) {
-      if (name != null && name.isNotEmpty) {
-        userName = name;
-      }
-    });
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white,
-            Colors.grey[50]!,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 0,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white,
+                Colors.grey[50]!,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.1),
+                spreadRadius: 0,
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: Border.all(
+              color: Colors.grey[200]!,
+              width: 1,
+            ),
           ),
-        ],
-        border: Border.all(
-          color: Colors.grey[200]!,
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // User info and rating
-          Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: _getAvatarColor(userName).withOpacity(0.3),
-                      blurRadius: 4,
-                      spreadRadius: 0,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: CircleAvatar(
-                  radius: 20,
-                  backgroundColor: _getAvatarColor(userName),
-                  child: Text(
-                    userName.isNotEmpty ? userName[0] : "?",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+              // User info and rating
+              Row(
+                children: [
+                  // Avatar with loading state
+                  snapshot.connectionState == ConnectionState.waiting
+                      ? ShimmerAvatar()
+                      : Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    _getAvatarColor(userName).withOpacity(0.3),
+                                blurRadius: 4,
+                                spreadRadius: 0,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: CircleAvatar(
+                            radius: 20,
+                            backgroundColor: _getAvatarColor(userName),
+                            child: Text(
+                              userName.isNotEmpty ? userName[0] : "?",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                  const SizedBox(width: 12),
+
+                  // Name
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        snapshot.connectionState == ConnectionState.waiting
+                            ? Shimmer.fromColors(
+                                baseColor: Colors.grey[300]!,
+                                highlightColor: Colors.grey[100]!,
+                                child: Container(
+                                  width: 100,
+                                  height: 16,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
+                                userName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                        const SizedBox(height: 2),
+                      ],
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
 
-              // Name and date
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      userName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _formatDate(date),
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
+                  // Rating stars
+                  Row(
+                    children: List.generate(5, (index) {
+                      return Icon(
+                        index < rating ? Icons.star : Icons.star_border,
+                        color: Colors.amber,
+                        size: 16,
+                      );
+                    }),
+                  ),
+                ],
               ),
 
-              // Rating stars
-              Row(
-                children: List.generate(5, (index) {
-                  return Icon(
-                    index < rating ? Icons.star : Icons.star_border,
-                    color: Colors.amber,
-                    size: 16,
-                  );
-                }),
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 12),
+
+              // Comment
+              Text(
+                comment,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[800],
+                  height: 1.5,
+                ),
               ),
             ],
           ),
-
-          const SizedBox(height: 12),
-          const Divider(),
-          const SizedBox(height: 12),
-
-          // Comment
-          Text(
-            comment,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[800],
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
 // Add this method to fetch user name from userId
   Future<String?> _getUserName(String userId) async {
     try {
-      // First try to get from local cache
-      final prefs = await SharedPreferences.getInstance();
-      String? cachedName = prefs.getString('username_$userId');
-
-      if (cachedName != null && cachedName.isNotEmpty) {
-        return cachedName;
+      final userDetails = await _apiUser.getUserById(int.parse(userId));
+      if (userDetails.username.isNotEmpty) {
+        print('Retrieved username for user $userId: ${userDetails.username}');
+        return userDetails.username;
+      } else {
+        print('No username found for user $userId');
+        return null;
       }
-
-      // If not in cache, try to fetch from API
-      // This is where you would call your user API to get the user details
-      // For example:
-      // final userDetails = await _userApiService.getUserDetails(int.parse(userId));
-      // return userDetails.name;
-
-      // For now, we'll return a placeholder based on userId
-      return 'User $userId';
     } catch (e) {
-      print('Error fetching user name: $e');
+      print('Error fetching user name for user $userId: $e');
       return null;
     }
   }
@@ -1963,19 +2050,23 @@ class _FoodDetailPageState extends State<FoodDetailPage> with TickerProviderStat
 
     return colors[hash.abs() % colors.length];
   }
+}
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      return 'Today';
-    } else if (difference.inDays == 1) {
-      return 'Yesterday';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} days ago';
-    } else {
-      return '${date.day}/${date.month}/${date.year}';
-    }
+// Shimmer effect for loading avatar
+class ShimmerAvatar extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
   }
 }
