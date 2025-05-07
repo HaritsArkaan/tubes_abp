@@ -29,7 +29,7 @@ class _AddSnackPageState extends State<AddSnackPage> {
   final ApiService _apiService = ApiService();
   bool _isLoading = false;
 
-  final List<String> _priceOptions = ['5.000', '7.000', '10.000', '15.000'];
+  final List<String> _priceOptions = ['5000', '7000', '10000', '15000'];
   final List<String> _typeOptions = ['Food', 'Drink', 'Dessert', 'Snack'];
 
   @override

@@ -123,27 +123,49 @@ class ApiService {
     }
   }
 
-
   Future<Snack> updateSnack(Snack snack, String token) async {
-    try {
-      final response = await http.put(
-        Uri.parse('${AppConfig.baseUrl}/api/snacks/${snack.id}'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: json.encode(snack.toJson()),
-      );
+    final uri = Uri.parse('${AppConfig.baseUrl}/api/snacks/${snack.id}');
+    final request = http.MultipartRequest('PUT', uri);
 
-      if (response.statusCode == 200) {
-        return Snack.fromJson(json.decode(response.body));
-      } else {
-        throw Exception('Failed to update snack: ${response.statusCode}');
+    // Tambahkan header Authorization
+    request.headers['Authorization'] = 'Bearer $token';
+
+    // Tambahkan field-field
+    request.fields['name'] = Uri.encodeComponent(snack.name);
+    request.fields['price'] = snack.price.toInt().toString();
+    request.fields['seller'] = Uri.encodeComponent(snack.seller);
+    request.fields['contact'] = Uri.encodeComponent(snack.contact);
+    request.fields['location'] = Uri.encodeComponent(snack.location);
+    request.fields['rating'] = snack.rating.toString();
+    request.fields['type'] = snack.type;
+    request.fields['userId'] = snack.userId.toString();
+
+    // Jika ada file gambar baru
+    if (snack.image.isNotEmpty) {
+      try {
+        final bytes = base64Decode(snack.image);
+        request.files.add(http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: 'snack_image.jpg',
+          contentType: MediaType('image', 'jpeg'), // Ubah ke 'png' jika gambar PNG
+        ));
+      } catch (e) {
+        throw Exception('Error decoding image file: $e');
       }
-    } catch (e) {
-      throw Exception('Error updating snack: $e');
+    }
+
+    // Kirim request
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode == 200) {
+      return Snack.fromJson(json.decode(response.body));
+    } else {
+      throw Exception('Failed to update snack: ${response.statusCode} - ${response.body}');
     }
   }
+
 
   Future<void> deleteSnack(int snackId, String token) async {
     try {

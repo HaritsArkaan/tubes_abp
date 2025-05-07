@@ -182,55 +182,106 @@ class _JajananKuState extends State<JajananKu> with SingleTickerProviderStateMix
   }
 
   Future<void> _editSnack(Snack snack) async {
-    final result = await showDialog<Snack>(
-      context: context,
-      builder: (BuildContext context) {
-        return EditSnackDialog(
-          snack: snack,
-          onSave: (updatedSnack) async {
-            try {
-              // Get token from shared preferences
-              final prefs = await SharedPreferences.getInstance();
-              final token = await prefs.getString('token');
+    try {
+      // Get token from shared preferences
+      final prefs = await SharedPreferences.getInstance();
+      final token = await prefs.getString('jwt_token');
 
-              if (token == null) {
-                throw Exception('User not authenticated');
-              }
-
-              // Update snack via API
-              final updatedSnackFromApi = await _apiService.updateSnack(updatedSnack, token);
-              return updatedSnackFromApi;
-            } catch (e) {
-              _showToast('Failed to update: ${e.toString()}');
-              return null;
-            }
-          },
-        );
-      },
-    );
-
-    if (result != null) {
-      setState(() {
-        // Find the index of the item to update
-        final index = _snacks.indexWhere((s) => s.id == result.id);
-        if (index != -1) {
-          // Replace the old item with the updated one
-          _snacks[index] = result;
-        }
-      });
-      _showToast('${result.name} berhasil diperbarui');
-
-      // Refresh review statistics for this snack
-      try {
-        final statsData = await _apiReview.getReviewStatistics(result.id);
-        if (statsData != null && mounted) {
-          setState(() {
-            _reviewStats[result.id] = ReviewStatistic.fromJson(statsData);
-          });
-        }
-      } catch (e) {
-        print('Error refreshing review stats: $e');
+      if (token == null) {
+        _showToast('User not authenticated');
+        return;
       }
+      final result = await showDialog<Snack>(
+        context: context,
+        builder: (BuildContext context) {
+          return EditSnackDialog(
+            snack: snack,
+            onSave: (updatedSnack) async {
+              try {
+                // Show loading indicator
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (BuildContext context) {
+                    return const AlertDialog(
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF70AE6E)),
+                          ),
+                          SizedBox(height: 16),
+                          Text('Updating snack...'),
+                        ],
+                      ),
+                    );
+                  },
+                );
+
+                // Update snack via API
+                final updatedSnackFromApi = await _apiService.updateSnack(
+                    updatedSnack, token);
+                // Close loading dialog
+                Navigator.of(context).pop();
+                // Close edit dialog and return updated snack
+                Navigator.of(context).pop(updatedSnackFromApi);
+                return updatedSnackFromApi;
+              } catch (e) {
+                // Close loading dialog if open
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                }
+
+                // Show error dialog
+                showDialog(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: const Text('Error'),
+                      content: Text('Failed to update snack: ${e.toString()}'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+                return null;
+              }
+            },
+          );
+        },
+      );
+
+      if (result != null) {
+        setState(() {
+          // Find the index of the item to update
+          final index = _snacks.indexWhere((s) => s.id == result.id);
+          if (index != -1) {
+            // Replace the old item with the updated one
+            _snacks[index] = result;
+          }
+        });
+        _showToast('${result.name} berhasil diperbarui');
+
+        // Refresh review statistics for this snack
+        try {
+          final statsData = await _apiReview.getReviewStatistics(result.id);
+          if (statsData != null && mounted) {
+            setState(() {
+              _reviewStats[result.id] = ReviewStatistic.fromJson(statsData);
+            });
+          }
+        } catch (e) {
+          print('Error refreshing review stats: $e');
+        }
+      }
+    } catch (e) {
+      _showToast('Error: ${e.toString()}');
+      print('Error in _editSnack: $e');
     }
   }
 

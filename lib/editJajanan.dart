@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -96,6 +98,45 @@ class _EditSnackDialogState extends State<EditSnackDialog> {
   }
 
   void _saveSnack() {
+    // Validate required fields
+    if (_nameController.text.isEmpty) {
+      AwesomeDialog(
+        context: context,
+        dialogType: DialogType.error,
+        animType: AnimType.scale,
+        title: 'Error',
+        desc: 'Please enter a name for the snack',
+        btnOkOnPress: () {},
+        btnOkColor: Colors.red,
+      ).show();
+      return;
+    }
+
+    if (_selectedType.isEmpty) {
+      AwesomeDialog(
+        context: context,
+        dialogType: DialogType.error,
+        animType: AnimType.scale,
+        title: 'Error',
+        desc: 'Please select a type for the snack',
+        btnOkOnPress: () {},
+        btnOkColor: Colors.red,
+      ).show();
+      return;
+    }
+
+    // Prepare image data if a new image was selected
+    String imageBase64 = '';
+    if (_imageFile != null) {
+      try {
+        final bytes = _imageFile!.readAsBytesSync();
+        imageBase64 = base64Encode(bytes);
+      } catch (e) {
+        print('Error encoding image: $e');
+        // Continue without updating the image
+      }
+    }
+
     // Create updated snack item
     double price;
     if (_selectedPrice.isNotEmpty) {
@@ -109,31 +150,19 @@ class _EditSnackDialogState extends State<EditSnackDialog> {
     final updatedSnack = Snack(
       id: widget.snack.id,
       name: _nameController.text,
-      imageUrl: widget.snack.imageUrl, // Keep original URL since we can't upload in this example
+      imageUrl: widget.snack.imageUrl, // Keep original URL
+      image: imageBase64, // Add base64 image if available
       price: price,
       type: _selectedType,
       location: _addressController.text,
       rating: widget.snack.rating, // Keep original rating
       contact: _contactController.text,
-      userId: widget.snack.userId, image: '', seller: '', // Keep original userId
+      seller: widget.snack.seller, // Keep original seller
+      userId: widget.snack.userId, // Keep original userId
     );
 
     // Call the onSave callback
     widget.onSave(updatedSnack);
-
-    // Show success dialog
-    AwesomeDialog(
-      context: context,
-      dialogType: DialogType.success,
-      animType: AnimType.scale,
-      title: 'Success!',
-      desc: 'Snack updated successfully!',
-      btnOkText: 'OK',
-      btnOkColor: const Color(0xFF4CAF50),
-      btnOkOnPress: () {
-        Navigator.pop(context); // Close the dialog
-      },
-    ).show();
   }
 
   @override
