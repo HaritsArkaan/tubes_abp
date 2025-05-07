@@ -239,20 +239,20 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                       child: TextField(
                         controller: _usernameController,
                         style: GoogleFonts.poppins(fontSize: 16),
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           hintText: 'Username',
-                          prefixIcon: const Icon(
+                          prefixIcon: Icon(
                             Icons.person_outline,
                             color: Color(0xFF4CAF50),
                           ),
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                          contentPadding: EdgeInsets.symmetric(vertical: 16),
                         ),
                       ),
                     ),
                     const SizedBox(height: 16),
 
-                    // Password field
+                    // // Password field
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -855,8 +855,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                         _buildInfoItem(
                           icon: Icons.lock_outline,
                           title: 'Password',
-                          value: _password.isEmpty ? 'Masukkan password baru' : '•' * (_password.length > 8 ? 8 : _password.length),
-                          isPassword: true,
+                          value: '********',
                           size: size,
                         ),
                       ],
@@ -1071,12 +1070,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
             ],
           ),
           const Spacer(),
-          if (isPassword && value != 'Masukkan password baru')
-            Icon(
-              Icons.visibility_off_outlined,
-              color: Colors.grey[400],
-              size: 20,
-            ),
         ],
       ),
     );
